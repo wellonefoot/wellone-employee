@@ -11,6 +11,10 @@ const ADMIN_CONFIG = {
   const $=id=>document.getElementById(id);
   const clean=v=>String(v??'').trim();
   const esc=v=>clean(v).replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+  function withTimeout(promise,ms=12000,message='Network is taking too long. Please try again.'){
+    let timer;
+    return Promise.race([Promise.resolve(promise).finally(()=>clearTimeout(timer)),new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error(message)),ms);})]);
+  }
   const SESSION_KEY='wellone_employee_session_v79';
   const STORE_CHANNEL_NAME='wellone-store-events-v1';
   const STORE_EVENT_NAME='store-change';
@@ -20,6 +24,8 @@ const ADMIN_CONFIG = {
   let searchResults=[];
   let channel=null;
   let channelReady=false;
+  let inventoryChannel=null;
+  let inventoryRefreshTimer=null;
 
   function db(){
     if(!client) client=window.supabase.createClient(ADMIN_CONFIG.supabaseUrl,ADMIN_CONFIG.supabaseAnonKey,{realtime:{params:{eventsPerSecond:10}}});
@@ -34,6 +40,8 @@ const ADMIN_CONFIG = {
     saveSession(null); currentProduct=null; $('employeeDesk').hidden=true; $('employeeLoginScreen').hidden=false; $('employeeProductResult').innerHTML=''; $('employeeLoginError').textContent=message; setTimeout(()=>$('employeeLoginUsername')?.focus(),50);
   }
   function stockText(value){ const n=Math.max(0,Number(value||0)); return `${n} available`; }
+  function manualAvailable(status){ return clean(status || 'in_stock') !== 'out_of_stock'; }
+  function variantAvailable(product,v){ if(!manualAvailable(product?.stock_status)) return false; return Boolean(product?.track_inventory) ? (manualAvailable(v?.stock_status) && Number(v?.stock||0)>0) : manualAvailable(v?.stock_status); }
   function money(value){ return `₹${Number(value||0).toLocaleString('en-IN')}`; }
   function imageUrl(value){const u=clean(value);if(!u)return '';return u.includes('/storage/v1/object/public/')&&!u.includes('?')?`${u}?width=360&quality=72`:u;}
   function productOptionName(product){
@@ -45,9 +53,11 @@ const ADMIN_CONFIG = {
   }
   function variantsOf(product){ return Array.isArray(product?.variants)?product.variants:[]; }
   function totalAvailable(product){
+    if(!product?.track_inventory) return null;
     const vs=variantsOf(product); if(vs.length) return vs.reduce((sum,v)=>sum+Math.max(0,Number(v.stock||0)),0);
     return Math.max(0,Number(product?.stock_quantity||0));
   }
+  function stockSummary(product){ const total=totalAvailable(product); return total===null ? (manualAvailable(product?.stock_status)?'Available · manual stock':'Out of stock') : stockText(total); }
   function renderProduct(product){
     currentProduct=product;
     const box=$('employeeProductResult');
@@ -55,20 +65,22 @@ const ADMIN_CONFIG = {
     const variants=variantsOf(product);
     const optionName=productOptionName(product);
     const track=Boolean(product.track_inventory);
-    const firstAvailableIndex=variants.findIndex(x=>Number(x.stock||0)>0);
+    const firstAvailableIndex=variants.findIndex(x=>variantAvailable(product,x));
     const grouped=new Map();
     variants.forEach((v,index)=>{const colour=clean(v.color)||'Default';if(!grouped.has(colour))grouped.set(colour,[]);grouped.get(colour).push({v,index});});
-    const options=Array.from(grouped.entries()).map(([colour,items])=>`<section class="employee-colour-group ${colour==='Default'?'option-only':''}">${colour==='Default'?'':`<div class="employee-colour-head"><b>${esc(colour)}</b><small>${esc(stockText(items.reduce((sum,item)=>sum+Math.max(0,Number(item.v.stock||0)),0)))}</small></div>`}<div class="employee-size-grid">${items.map(({v,index})=>{
-      const available=Math.max(0,Number(v.stock||0));
+    const options=Array.from(grouped.entries()).map(([colour,items])=>`<section class="employee-colour-group ${colour==='Default'?'option-only':''}">${colour==='Default'?'':`<div class="employee-colour-head"><b>${esc(colour)}</b><small>${esc(track?stockText(items.reduce((sum,item)=>sum+Math.max(0,Number(item.v.stock||0)),0)):(items.some(item=>variantAvailable(product,item.v))?'Available':'Out of stock'))}</small></div>`}<div class="employee-size-grid">${items.map(({v,index})=>{
+      const availableQty=Math.max(0,Number(v.stock||0));
+      const available=variantAvailable(product,v);
       const size=clean(v.size)||'Standard';
-      return `<label class="employee-variant-option ${available<=0?'sold-out':''}"><input type="radio" name="employeeVariant" value="${esc(v.id)}" ${index===firstAvailableIndex?'checked':''} ${available<=0?'disabled':''}><span><b>${esc(optionName)} ${esc(size)}</b><small>${esc(stockText(available))}${Number(v.price||0)>0?` · ${esc(money(v.price))}`:''}</small></span></label>`;
+      const availabilityText=track?stockText(availableQty):(available?'Available':'Out of stock');
+      return `<label class="employee-variant-option ${available?'':'sold-out'}"><input type="radio" name="employeeVariant" value="${esc(v.id)}" ${index===firstAvailableIndex?'checked':''} ${available?'':'disabled'}><span><b>${esc(optionName)} ${esc(size)}</b><small>${esc(availabilityText)}${Number(v.price||0)>0?` · ${esc(money(v.price))}`:''}</small></span></label>`;
     }).join('')}</div></section>`).join('');
-    const noAvailable=variants.length?variants.every(v=>Number(v.stock||0)<=0):Number(product.stock_quantity||0)<=0;
+    const noAvailable=variants.length?variants.every(v=>!variantAvailable(product,v)):(track?Number(product.stock_quantity||0)<=0:!manualAvailable(product.stock_status));
     box.innerHTML=`<article class="employee-product-card">
-      <div class="employee-product-main"><div class="employee-product-photo">${product.image_url?`<img decoding="async" src="${esc(imageUrl(product.image_url))}" alt="">`:'<span>No image</span>'}</div><div>${product.barcode?`<small>Barcode ${esc(product.barcode)}</small>`:''}<h2>${esc(product.name)}</h2><b class="employee-total-stock">${esc(stockText(totalAvailable(product)))}</b></div></div>
-      ${!track?'<div class="employee-warning">Stock tracking is off for this product. Turn it on in Admin before recording sales.</div>':''}
-      ${variants.length?`<div class="employee-variant-list"><h3>${grouped.size===1&&grouped.has('Default')?`Select ${esc(optionName)}`:`Select exact colour + ${esc(optionName)}`}</h3>${options}</div>`:'<div class="employee-standard-stock"><b>Standard item</b><span>'+esc(stockText(product.stock_quantity))+'</span></div>'}
-      <form id="employeeSaleForm" class="employee-sale-form"><label>Sold quantity<input id="employeeSaleQty" type="number" min="1" step="1" inputmode="numeric" value="1" required></label><button type="submit" ${!track||noAvailable?'disabled':''}>Mark Sold</button></form>
+      <div class="employee-product-main"><div class="employee-product-photo">${product.image_url?`<img decoding="async" src="${esc(imageUrl(product.image_url))}" alt="">`:'<span>No image</span>'}</div><div>${product.barcode?`<small>Barcode ${esc(product.barcode)}</small>`:''}<h2>${esc(product.name)}</h2><b class="employee-total-stock">${esc(stockSummary(product))}</b></div></div>
+      ${!track?'<div class="employee-warning">Quantity tracking is off. Availability is controlled manually in Admin; sales can still be recorded.</div>':''}
+      ${variants.length?`<div class="employee-variant-list"><h3>${grouped.size===1&&grouped.has('Default')?`Select ${esc(optionName)}`:`Select exact colour + ${esc(optionName)}`}</h3>${options}</div>`:'<div class="employee-standard-stock"><b>Standard item</b><span>'+esc(track?stockText(product.stock_quantity):(manualAvailable(product.stock_status)?'Available':'Out of stock'))+'</span></div>'}
+      <form id="employeeSaleForm" class="employee-sale-form"><label>Sold quantity<input id="employeeSaleQty" type="number" min="1" step="1" inputmode="numeric" value="1" required></label><button type="submit" ${noAvailable?'disabled':''}>Mark Sold</button></form>
     </article>`;
     $('employeeSaleForm')?.addEventListener('submit',recordSale);
   }
@@ -78,7 +90,7 @@ const ADMIN_CONFIG = {
     const box=$('employeeProductResult');
     if(!searchResults.length){renderProduct(null);return;}
     if(searchResults.length===1){renderProduct(searchResults[0]);return;}
-    box.innerHTML=`<div class="employee-search-results"><div class="employee-search-results-head"><b>${searchResults.length} products found</b><small>Choose the correct item to record a sale.</small></div>${searchResults.map((product,index)=>`<button type="button" data-employee-result="${index}"><span class="employee-search-photo">${product.image_url?`<img src="${esc(imageUrl(product.image_url))}" alt="">`:'No image'}</span><span><b>${esc(product.name)}</b><small>${product.barcode?`Barcode ${esc(product.barcode)} · `:''}${esc(stockText(totalAvailable(product)))}</small></span><strong>Select</strong></button>`).join('')}</div>`;
+    box.innerHTML=`<div class="employee-search-results"><div class="employee-search-results-head"><b>${searchResults.length} products found</b><small>Choose the correct item to record a sale.</small></div>${searchResults.map((product,index)=>`<button type="button" data-employee-result="${index}"><span class="employee-search-photo">${product.image_url?`<img src="${esc(imageUrl(product.image_url))}" alt="">`:'No image'}</span><span><b>${esc(product.name)}</b><small>${product.barcode?`Barcode ${esc(product.barcode)} · `:''}${esc(stockSummary(product))}</small></span><strong>Select</strong></button>`).join('')}</div>`;
   }
   async function ensureBroadcast(){
     if(channelReady&&channel)return channel;
@@ -101,7 +113,7 @@ const ADMIN_CONFIG = {
   function startInventoryRealtime(){
     if(inventoryChannel)return;
     try{
-      inventoryChannel=db().channel('wellone-employee-inventory-v85');
+      inventoryChannel=db().channel('wellone-employee-inventory-v86');
       ['products','product_variants'].forEach(table=>inventoryChannel.on('postgres_changes',{event:'*',schema:'public',table},payload=>{
         if(!currentProduct)return;
         const row=payload?.new||payload?.old||{};
@@ -119,7 +131,7 @@ const ADMIN_CONFIG = {
     event.preventDefault(); $('employeeLoginError').textContent='Checking...';
     const username=clean($('employeeLoginUsername').value),password=$('employeeLoginPassword').value||'';
     try{
-      const {data,error}=await db().rpc('employee_login',{p_username:username,p_password:password});
+      const {data,error}=await withTimeout(db().rpc('employee_login',{p_username:username,p_password:password}),12000,'Login timed out. Check internet and try again.');
       if(error)throw error;
       saveSession(data); $('employeeLoginPassword').value=''; $('employeeLoginError').textContent=''; showDesk();
     }catch(error){ $('employeeLoginError').textContent=error.message||'Login failed.'; }
@@ -128,7 +140,7 @@ const ADMIN_CONFIG = {
     event?.preventDefault(); const query=clean($('employeeBarcodeInput').value); if(!query)return;
     setStatus('Searching products...','loading'); $('employeeProductResult').innerHTML='';
     try{
-      let {data,error}=await db().rpc('employee_search_products',{p_token:session?.token||'',p_query:query});
+      let {data,error}=await withTimeout(db().rpc('employee_search_products',{p_token:session?.token||'',p_query:query}),12000,'Search timed out. Please try again.');
       if(error&&/employee_search_products|function|schema cache/i.test(error.message||'')){
         const fallback=await db().rpc('employee_get_product_by_barcode',{p_token:session?.token||'',p_barcode:query});
         data=fallback.data?[fallback.data]:[]; error=fallback.error;
@@ -149,9 +161,9 @@ const ADMIN_CONFIG = {
     const variantId=selected?.value||null;
     const button=event.currentTarget.querySelector('button'); button.disabled=true; setStatus('Saving sale...','loading');
     try{
-      const {data,error}=await db().rpc('employee_record_sale',{p_token:session?.token||'',p_product_id:currentProduct.id,p_variant_id:variantId,p_quantity:qty});
+      const {data,error}=await withTimeout(db().rpc('employee_record_sale',{p_token:session?.token||'',p_product_id:currentProduct.id,p_variant_id:variantId,p_quantity:qty}),12000,'Sale update timed out. Check the stock before trying again.');
       if(error)throw error;
-      renderProduct(data); setStatus(`Sold ${qty} unit${qty===1?'':'s'}. Stock updated live.`,'ok');
+      renderProduct(data); setStatus(currentProduct.track_inventory?`Sold ${qty} unit${qty===1?'':'s'}. Stock updated live.`:`Sale recorded (${qty}). Availability remains manual.`,'ok');
       broadcastStock(currentProduct.id,variantId).catch(()=>{});
     }catch(error){
       if(/expired|login/i.test(error.message||'')){showLogin('Session expired. Login again.');return;}

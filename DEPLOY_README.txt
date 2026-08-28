@@ -1,8 +1,16 @@
-WellOne Employee v85 — flexible product sales
-- Separate deployment; index.html is at ZIP root.
-- Login with employee username/password created in Admin > Employees.
-- One search accepts a product name or barcode.
-- Employees can sell an exact colour + size, ml, litre, pack or any custom admin-created option.
-- Sold quantity defaults to 1; only the selected exact option is deducted.
-- v85 uses a fresh service-worker/cache namespace and keeps live Supabase inventory calls network-fresh.
-- Run supabase/10_v85_heavy_commerce_flow.sql once before using this build.
+WellOne Employee v86 — exact-option sales desk
+
+DATABASE FIRST
+- If migration 10 is not already installed, run supabase/10_v85_heavy_commerce_flow.sql.
+- Then run supabase/11_v86_exact_options_manual_stock_live.sql.
+
+DEPLOY
+- Deploy the contents of this folder to the employee site root.
+
+V86
+- Login uses employee username/password created in Admin > Employees.
+- One search accepts product name or barcode.
+- Exact colour + size/ml/pack options appear separately and must be selected separately.
+- Tracked stock deducts only the selected exact variant.
+- Manual-stock sales are recorded while availability remains controlled by Admin.
+- Fixed the realtime-variable crash that could stop the desk immediately after login.

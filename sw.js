@@ -1,8 +1,8 @@
 'use strict';
-const CACHE_VERSION='wellone-employee-v86-live';
+const CACHE_VERSION='wellone-employee-v88-stable-live';
 const STATIC_CACHE=`${CACHE_VERSION}-static`;
 const IMAGE_CACHE=`${CACHE_VERSION}-images`;
-const STATIC_FILES=['./css/admin.css?v=86', './js/employee.bundle.js?v=86', './js/pwa-install.js?v=86', './manifest.webmanifest', './assets/logo.png?v=86'];
+const STATIC_FILES=['./css/admin.css?v=88', './js/employee.bundle.js?v=88', './js/pwa-install.js?v=88', './manifest.webmanifest', './assets/logo.png?v=88'];
 self.addEventListener('install',event=>event.waitUntil((async()=>{const c=await caches.open(STATIC_CACHE);await Promise.allSettled(STATIC_FILES.map(f=>c.add(f)));await self.skipWaiting();})()));
 self.addEventListener('activate',event=>event.waitUntil((async()=>{const keys=await caches.keys();await Promise.all(keys.filter(k=>k.startsWith('wellone-employee-')&&!k.startsWith(CACHE_VERSION)).map(k=>caches.delete(k)));await self.clients.claim();})()));
 function urlOf(r){try{return new URL(r.url);}catch(_e){return null;}}

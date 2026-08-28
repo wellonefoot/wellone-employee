@@ -11,10 +11,6 @@ const ADMIN_CONFIG = {
   const $=id=>document.getElementById(id);
   const clean=v=>String(v??'').trim();
   const esc=v=>clean(v).replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
-  function withTimeout(promise,ms=12000,message='Network is taking too long. Please try again.'){
-    let timer;
-    return Promise.race([Promise.resolve(promise).finally(()=>clearTimeout(timer)),new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error(message)),ms);})]);
-  }
   const SESSION_KEY='wellone_employee_session_v79';
   const STORE_CHANNEL_NAME='wellone-store-events-v1';
   const STORE_EVENT_NAME='store-change';
@@ -113,7 +109,7 @@ const ADMIN_CONFIG = {
   function startInventoryRealtime(){
     if(inventoryChannel)return;
     try{
-      inventoryChannel=db().channel('wellone-employee-inventory-v86');
+      inventoryChannel=db().channel('wellone-employee-inventory-v88');
       ['products','product_variants'].forEach(table=>inventoryChannel.on('postgres_changes',{event:'*',schema:'public',table},payload=>{
         if(!currentProduct)return;
         const row=payload?.new||payload?.old||{};
@@ -131,7 +127,7 @@ const ADMIN_CONFIG = {
     event.preventDefault(); $('employeeLoginError').textContent='Checking...';
     const username=clean($('employeeLoginUsername').value),password=$('employeeLoginPassword').value||'';
     try{
-      const {data,error}=await withTimeout(db().rpc('employee_login',{p_username:username,p_password:password}),12000,'Login timed out. Check internet and try again.');
+      const {data,error}=await db().rpc('employee_login',{p_username:username,p_password:password});
       if(error)throw error;
       saveSession(data); $('employeeLoginPassword').value=''; $('employeeLoginError').textContent=''; showDesk();
     }catch(error){ $('employeeLoginError').textContent=error.message||'Login failed.'; }
@@ -140,7 +136,7 @@ const ADMIN_CONFIG = {
     event?.preventDefault(); const query=clean($('employeeBarcodeInput').value); if(!query)return;
     setStatus('Searching products...','loading'); $('employeeProductResult').innerHTML='';
     try{
-      let {data,error}=await withTimeout(db().rpc('employee_search_products',{p_token:session?.token||'',p_query:query}),12000,'Search timed out. Please try again.');
+      let {data,error}=await db().rpc('employee_search_products',{p_token:session?.token||'',p_query:query});
       if(error&&/employee_search_products|function|schema cache/i.test(error.message||'')){
         const fallback=await db().rpc('employee_get_product_by_barcode',{p_token:session?.token||'',p_barcode:query});
         data=fallback.data?[fallback.data]:[]; error=fallback.error;
@@ -161,7 +157,7 @@ const ADMIN_CONFIG = {
     const variantId=selected?.value||null;
     const button=event.currentTarget.querySelector('button'); button.disabled=true; setStatus('Saving sale...','loading');
     try{
-      const {data,error}=await withTimeout(db().rpc('employee_record_sale',{p_token:session?.token||'',p_product_id:currentProduct.id,p_variant_id:variantId,p_quantity:qty}),12000,'Sale update timed out. Check the stock before trying again.');
+      const {data,error}=await db().rpc('employee_record_sale',{p_token:session?.token||'',p_product_id:currentProduct.id,p_variant_id:variantId,p_quantity:qty});
       if(error)throw error;
       renderProduct(data); setStatus(currentProduct.track_inventory?`Sold ${qty} unit${qty===1?'':'s'}. Stock updated live.`:`Sale recorded (${qty}). Availability remains manual.`,'ok');
       broadcastStock(currentProduct.id,variantId).catch(()=>{});

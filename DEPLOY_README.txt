@@ -1,16 +1,15 @@
-WellOne Employee v86 — exact-option sales desk
+WellOne Employee v88 — stable staff login + exact-option sales
 
-DATABASE FIRST
-- If migration 10 is not already installed, run supabase/10_v85_heavy_commerce_flow.sql.
-- Then run supabase/11_v86_exact_options_manual_stock_live.sql.
+DATABASE
+- v88 client reliability changes require NO new SQL.
+- Existing employee RPCs require migrations 10 and 11 if they were never installed.
 
 DEPLOY
-- Deploy the contents of this folder to the employee site root.
+- Deploy the CONTENTS of this folder to the Employee site root.
 
-V86
-- Login uses employee username/password created in Admin > Employees.
-- One search accepts product name or barcode.
-- Exact colour + size/ml/pack options appear separately and must be selected separately.
-- Tracked stock deducts only the selected exact variant.
-- Manual-stock sales are recorded while availability remains controlled by Admin.
-- Fixed the realtime-variable crash that could stop the desk immediately after login.
+V88 PERFORMANCE / RELIABILITY
+- Removed artificial Promise.race timeouts from employee login, product search and sale writes. This avoids false timeout messages while a valid Supabase request is still running.
+- Employee search is server-side and the SQL RPC is capped to 20 product matches.
+- Product stock refreshes live only for the currently opened product.
+- Exact colour + option groups remain independent.
+- Manual-stock sales are recorded without fake quantity deduction; Admin controls availability.

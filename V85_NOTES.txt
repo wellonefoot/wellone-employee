@@ -1,0 +1,5 @@
+WellOne v85 — employee
+- Safe asset-only service worker.
+- HTML/document navigation is never intercepted.
+- Supabase live/API traffic remains network-fresh.
+- Fresh v85 cache namespace removes earlier cache versions.

@@ -1,8 +1,8 @@
-WELLONE EMPLOYEE SITE - SEPARATE DEPLOYMENT
-
-Deploy the CONTENTS of this folder as its own site.
-Main entry: index.html
-
-Employees log in with the username/password created in the separate Admin site.
-Workflow: type barcode -> see exact colour + size variants and live quantity -> choose variant -> sold quantity defaults to 1 -> Mark Sold.
-Stock updates the shared Supabase inventory used by every WellOne deployment.
+WellOne Employee v85 — flexible product sales
+- Separate deployment; index.html is at ZIP root.
+- Login with employee username/password created in Admin > Employees.
+- One search accepts a product name or barcode.
+- Employees can sell an exact colour + size, ml, litre, pack or any custom admin-created option.
+- Sold quantity defaults to 1; only the selected exact option is deducted.
+- v85 uses a fresh service-worker/cache namespace and keeps live Supabase inventory calls network-fresh.
+- Run supabase/10_v85_heavy_commerce_flow.sql once before using this build.

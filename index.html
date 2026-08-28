@@ -5,16 +5,17 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <title>Wellone Employee</title>
   <link rel="preconnect" href="https://wnavzhrkwgnegjdetdno.supabase.co">
-  <link rel="stylesheet" href="css/admin.css?v=80">
+  <link rel="stylesheet" href="css/admin.css?v=85">
   <link rel="icon" href="assets/favicon/favicon.ico">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="assets/favicon/apple-icon-180x180.png">
   <meta name="theme-color" content="#f5fff4">
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 </head>
 <body class="employee-page-body">
   <section id="employeeLoginScreen" class="employee-login-screen">
     <form id="employeeLoginForm" class="employee-login-card">
-      <img src="assets/logo.png?v=80" alt="Wellone">
+      <img src="assets/logo.png?v=85" alt="Wellone">
       <p class="tag">employee stock desk</p>
       <h1>Employee Login</h1>
       <p>Use the username and password created by the admin.</p>
@@ -27,16 +28,16 @@
 
   <main id="employeeDesk" class="employee-desk" hidden>
     <header class="employee-topbar">
-      <a href="index.html" class="employee-brand"><img src="assets/logo.png?v=80" alt="Wellone"></a>
+      <a href="index.html" class="employee-brand"><img src="assets/logo.png?v=85" alt="Wellone"></a>
       <div><small>Signed in as</small><b id="employeeSessionName">Employee</b></div>
       <button id="employeeLogoutBtn" type="button">Logout</button>
     </header>
 
     <section class="employee-work-card">
-      <div class="employee-work-title"><p class="tag">stock sale</p><h1>Type product barcode</h1><p>Find the item, choose its exact colour and size, then mark the sold quantity.</p></div>
+      <div class="employee-work-title"><p class="tag">stock sale</p><h1>Find a product</h1><p>Search by product name or barcode, choose the exact available colour and option, then record the sold quantity.</p></div>
       <form id="employeeBarcodeForm" class="employee-barcode-form">
-        <input id="employeeBarcodeInput" inputmode="text" autocomplete="off" placeholder="Enter barcode" required>
-        <button type="submit">Find Item</button>
+        <input id="employeeBarcodeInput" inputmode="search" autocomplete="off" placeholder="Product name or barcode" required>
+        <button type="submit">Search</button>
       </form>
       <div id="employeeStatus" class="employee-status">Ready.</div>
       <div id="employeeProductResult" class="employee-product-result"></div>
@@ -44,8 +45,7 @@
   </main>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="js/admin-config.js?v=80"></script>
-  <script src="js/employee.js?v=80"></script>
-  <script src="js/pwa-install.js?v=80"></script>
+  <script src="js/employee.bundle.js?v=85"></script>
+  <script src="js/pwa-install.js?v=85"></script>
 </body>
 </html>

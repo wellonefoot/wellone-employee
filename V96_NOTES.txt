@@ -1,0 +1,29 @@
+WellOne v96 fixes and requested product workflow
+
+Customer
+- Fixed exact option resolution before order confirmation.
+- Added database migration 12_v96_reliable_orders_simple_variants.sql; RUN THIS IN SUPABASE after deployment.
+- Barcode values are searchable from the customer catalog search.
+- Colour + option products remain colour-first, then size/option.
+- Colour/size/image/price changes update only product dynamic sections rather than rebuilding the whole detail panel.
+- Order/cart/tracking pages have a full-screen light patterned background.
+- Added Terms & Conditions, Privacy Policy, Shipping Policy, and Cancellation & Refund Policy pages with legal footer links.
+- About page explains product types, ordering/payment verification and contains a small Quartz Web Solutions developer credit.
+
+Admin
+- Preserved existing admin authentication/login.
+- Product setup remains Simple / One option / Colour + option.
+- One colour image is inherited automatically by its sizes/options.
+- Exact-option image upload is hidden until Separate image is checked (except the lead colour row).
+- Exact-option price fields are hidden until Separate rate is checked.
+- Quick option-group builder shows one direct colour-image upload (reused by all sizes) and a generated per-option rate table when Separate rates is enabled.
+- Barcode, stock tracking, availability, category/subcategory and existing product data model remain compatible.
+
+Important
+- Website code can be deployed normally.
+- Run supabase/12_v96_reliable_orders_simple_variants.sql once in the SAME Supabase project used by all WellOne apps. Without the database function update, old RPC behavior can still reject some orders.
+- Payment-provider/KYC/legal approval is external; the website now exposes clearer merchant/order/payment/legal information but cannot guarantee provider approval.
+
+- Hidden individual options: Admin can set an option to “Hide option”. Customer catalog/search/order logic excludes it while keeping it editable in Admin.
+
+Policy defaults added for website-review readiness: normal dispatch 1–2 business days, normal delivery target 2–7 business days after dispatch, damaged/wrong/missing item reporting within 48 hours, and approved refund initiation within 7 business days. Change these published commitments if the store operates differently.

@@ -1,0 +1,42 @@
+WellOne v97 — complicated variant order fix
+===========================================
+
+Customer
+- Fixed the stale-cart checkout bug: checkout now reloads the repaired cart after live availability/variant resolution and sends the repaired exact variant IDs to Supabase.
+- Complex legacy colour + size products can resolve comma-separated old size rows such as 7,8,9.
+- Exact variant stock is authoritative when a product has variants; stale parent stock no longer wrongly blocks a valid option.
+- Cart items preserve exact variant ID, colour, option/size, product barcode, quantity and selected image context.
+- Barcode remains searchable on the customer catalog.
+- Colour is selected before size/option.
+- Colour/size changes update only the dynamic product areas (gallery, price, options, stock/button), not the whole page.
+- Added standard spacing between colour, size and quantity on mobile and desktop.
+- Cart drawer errors now have a dedicated readable row above cart items and cannot sit behind item cards.
+- New v97 customer cache namespace removes stale v96 variant data.
+
+Admin product editor
+- Flow simplified to Category -> Subcategory -> Product name -> Inventory/barcode -> Availability -> Description -> Product policies -> Product type -> Images/options.
+- Product types: Simple product, One option, Colour + option.
+- Colour + option uses one shared image per colour automatically for all sizes/options in that colour.
+- An exact option gets its own image only when Separate image is enabled.
+- Separate rates creates an automatic per-option rate table; common top price fields hide when all option rates are separate.
+- Separate quantities creates an automatic per-option quantity table and automatically enables stock tracking.
+- Native visible file input for colour images replaced by a styled Add colour image button.
+- Individual variants retain Available / Out of stock / Hide option controls.
+
+Orders/backend
+- New migration: supabase/13_v97_complicated_variant_orders.sql (run after v96 migration).
+- create_customer_order accepts exact IDs and safely recovers older colour+size carts.
+- Server still determines actual product/variant price and image; client-submitted money is not trusted.
+- Shared colour images are resolved correctly for inherited sizes in order records.
+- order_items stores product_barcode; Customer order history, Admin orders and Orders receiver show it when present.
+
+Verification performed before packaging
+- JavaScript syntax check across all JS files.
+- HTML parsing + duplicate ID check across all HTML files.
+- Local HTML asset/reference existence check.
+- CSS brace/structure check.
+- v97 migration presence/hash consistency across all four packages.
+- Complex legacy and modern colour+size cart-resolution unit-style tests.
+
+External limitation
+- A real order against the live production Supabase/payment environment cannot be executed here without production access. Run the migration and perform the short live test in DEPLOY_V97_FIRST.txt after deployment.

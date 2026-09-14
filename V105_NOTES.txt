@@ -1,0 +1,11 @@
+WellOne v105
+
+- Hidden comma-separated product search keywords for customer search.
+- Customer option filter checks available exact variants/stock.
+- Compact filter applying animation.
+- One Option quick-add can choose an image before adding the option(s); another batch can use another image.
+- Employee site has a top-level Manage section with Admin-parity Product List and Product Editor, separate from Sale.
+- Employee can add/edit/delete products and upload product/option images through short-lived upload permissions.
+- Cache version bumped to v105.
+
+IMPORTANT: Run REQUIRED_V105_SUPABASE.sql once before deploying these packages.

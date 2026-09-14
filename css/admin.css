@@ -342,7 +342,7 @@ html.pwa-launching .app-launch-splash.is-leaving{opacity:0;visibility:hidden;}
 @media(max-width:620px){.v97-product-form{gap:14px}.category-subcategory-row,.main-pricing-section,.variant-stock-price-row{grid-template-columns:1fr!important}.variant-builder-switches{grid-template-columns:1fr!important}.builder-colour-image{display:grid!important}.stylish-file-control{align-items:flex-start!important}.stylish-file-control small{text-align:left;max-width:100%}.variant-bulk-add{grid-template-columns:1fr!important;padding:10px!important}.variant-bulk-add label:nth-child(2){grid-column:auto}.product-image-step{padding:11px}.variant-rate-table.has-rate.has-qty .variant-rate-head,.variant-rate-table.has-rate.has-qty .variant-rate-row{grid-template-columns:minmax(88px,1fr) minmax(70px,82px) minmax(82px,96px) minmax(66px,78px);gap:6px;padding:8px}.variant-rate-table.has-rate .variant-rate-head,.variant-rate-table.has-rate .variant-rate-row{grid-template-columns:minmax(94px,1fr) minmax(74px,88px) minmax(88px,104px);gap:6px}.variant-rate-table.has-qty .variant-rate-head,.variant-rate-table.has-qty .variant-rate-row{grid-template-columns:minmax(100px,1fr) minmax(90px,120px)}}
 
 
-/* employee manage parity v105 */
+/* employee manage parity v106 */
 
 .employee-mode-tabs{display:flex;gap:8px;margin:0 0 14px;padding:5px;border:1px solid #dfe8c8;border-radius:16px;background:#fff;position:sticky;top:8px;z-index:120;box-shadow:0 8px 22px rgba(38,53,14,.05)}
 .employee-mode-tabs button{flex:1;min-height:42px;border:0;border-radius:12px;background:transparent;color:#5e6a51;font:inherit;font-size:13px;font-weight:900;cursor:pointer}
@@ -356,3 +356,19 @@ body.employee-manage-open .employee-desk{width:min(1180px,100%)}
 body.employee-manage-open .employee-work-card{display:none}
 #employeeManageBusy{display:none}#employeeManageBusy.show{display:grid}
 @media(max-width:720px){.employee-mode-tabs{top:6px}.employee-manage-status{top:61px}.employee-manage-shell .clean-card{padding:14px}.employee-manage-shell .panel-head{gap:10px}.employee-manage-shell .panel-actions{width:auto}.employee-manage-shell .list-controls{grid-template-columns:1fr}.employee-manage-shell .list-controls button{width:100%}}
+
+/* v106 employee navigation + startup optimization */
+.employee-mode-tabs{position:sticky;top:6px;z-index:500;margin:0 0 12px;background:rgba(255,255,255,.96);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+.employee-mode-tabs button{min-height:44px}
+.employee-mode-tabs button.active{pointer-events:none}
+.employee-mode-view{min-width:0}
+.employee-mode-view:not(.active){display:none!important}
+.employee-mode-view.active{display:block!important}
+.employee-manage-shell.active{display:grid!important}
+body:not(.employee-manage-open) #employeeSaleView.active .employee-work-card{display:block!important}
+body:not(.employee-manage-open) #employeeManageView{display:none!important}
+body.employee-manage-open #employeeSaleView{display:none!important}
+@media(max-width:720px){.employee-mode-tabs{top:4px;margin-bottom:10px}.employee-mode-tabs button{min-height:46px;font-size:13px}.employee-work-card{content-visibility:auto;contain-intrinsic-size:500px}}
+
+/* v107 separate Sales portal */
+.employee-page-body #employeeSaleView{display:block!important}

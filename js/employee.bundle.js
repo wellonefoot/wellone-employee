@@ -11,7 +11,7 @@ const ADMIN_CONFIG = {
   const $=id=>document.getElementById(id);
   const clean=v=>String(v??'').trim();
   const esc=v=>clean(v).replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
-  const SESSION_KEY='wellone_employee_session_v79';
+  const SESSION_KEY='wellone_sales_session_v107';
   const STORE_CHANNEL_NAME='wellone-store-events-v1';
   const STORE_EVENT_NAME='store-change';
   let client=null;
@@ -30,10 +30,18 @@ const ADMIN_CONFIG = {
   function loadSession(){ try{return JSON.parse(localStorage.getItem(SESSION_KEY)||'null');}catch(_e){return null;} }
   function saveSession(value){ session=value; if(value)localStorage.setItem(SESSION_KEY,JSON.stringify(value)); else localStorage.removeItem(SESSION_KEY); }
   function setStatus(message,type=''){ const box=$('employeeStatus'); box.textContent=message; box.className=`employee-status ${type}`.trim(); }
-  function showDesk(){ $('employeeLoginScreen').hidden=true; $('employeeDesk').hidden=false; $('employeeSessionName').textContent=session?.username||'Employee'; startInventoryRealtime(); setTimeout(()=>$('employeeBarcodeInput')?.focus(),50); }
+  function resetDeskToSale(){
+    document.body.classList.remove('employee-manage-open');
+    $('employeeSaleView')?.classList.add('active');
+  }
+  function showDesk(){
+    $('employeeLoginScreen').hidden=true; $('employeeDesk').hidden=false; $('employeeSessionName').textContent=session?.username||'Employee';
+    resetDeskToSale(); startInventoryRealtime();
+    requestAnimationFrame(()=>{window.scrollTo({top:0,behavior:'auto'});setTimeout(()=>$('employeeBarcodeInput')?.focus({preventScroll:true}),30);});
+  }
   function showLogin(message=''){
     stopInventoryRealtime();
-    saveSession(null); currentProduct=null; $('employeeDesk').hidden=true; $('employeeLoginScreen').hidden=false; $('employeeProductResult').innerHTML=''; $('employeeLoginError').textContent=message; setTimeout(()=>$('employeeLoginUsername')?.focus(),50);
+    saveSession(null); currentProduct=null; document.body.classList.remove('employee-manage-open'); $('employeeDesk').hidden=true; $('employeeLoginScreen').hidden=false; $('employeeProductResult').innerHTML=''; $('employeeLoginError').textContent=message; setTimeout(()=>$('employeeLoginUsername')?.focus(),50);
   }
   function stockText(value){ const n=Math.max(0,Number(value||0)); return `${n} available`; }
   function manualAvailable(status){ return clean(status || 'in_stock') !== 'out_of_stock'; }
@@ -127,7 +135,7 @@ const ADMIN_CONFIG = {
     event.preventDefault(); $('employeeLoginError').textContent='Checking...';
     const username=clean($('employeeLoginUsername').value),password=$('employeeLoginPassword').value||'';
     try{
-      const {data,error}=await db().rpc('employee_login',{p_username:username,p_password:password});
+      const {data,error}=await db().rpc('employee_sales_login',{p_username:username,p_password:password});
       if(error)throw error;
       saveSession(data); $('employeeLoginPassword').value=''; $('employeeLoginError').textContent=''; showDesk();
     }catch(error){ $('employeeLoginError').textContent=error.message||'Login failed.'; }

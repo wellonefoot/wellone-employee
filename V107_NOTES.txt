@@ -1,0 +1,5 @@
+WellOne v107 Sales Staff
+- Separate Sales-only portal.
+- Sales Staff IDs are created by Admin with Account type = Sales Staff.
+- Sales accounts may be used on multiple devices.
+- No product-management screen is included in this portal.

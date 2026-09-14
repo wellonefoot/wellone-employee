@@ -1,176 +1,124 @@
-/* bundled from admin-config.js */
+/* WellOne Employee v100 — sales + secured product manager */
 const ADMIN_CONFIG = {
   supabaseUrl: 'https://wnavzhrkwgnegjdetdno.supabase.co',
   supabaseAnonKey: 'sb_publishable_RbnMrDlHfEijBiejcRNPUg_mop2bqgM',
   storageBucket: 'product-images'
 };
 
-/* bundled from employee.js */
 (() => {
   'use strict';
   const $=id=>document.getElementById(id);
   const clean=v=>String(v??'').trim();
   const esc=v=>clean(v).replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+  const key=v=>clean(v).toLowerCase();
   const SESSION_KEY='wellone_employee_session_v79';
   const STORE_CHANNEL_NAME='wellone-store-events-v1';
   const STORE_EVENT_NAME='store-change';
-  let client=null;
-  let session=null;
-  let currentProduct=null;
-  let searchResults=[];
-  let channel=null;
-  let channelReady=false;
-  let inventoryChannel=null;
-  let inventoryRefreshTimer=null;
+  let client=null,session=null,currentProduct=null,channel=null,channelReady=false,inventoryChannel=null,inventoryRefreshTimer=null;
+  let manageMeta={categories:[],subcategories:[]}, manageProducts=[], employeeMainImageFile=null;
 
   function db(){
-    if(!client) client=window.supabase.createClient(ADMIN_CONFIG.supabaseUrl,ADMIN_CONFIG.supabaseAnonKey,{realtime:{params:{eventsPerSecond:10}}});
+    if(!client) client=window.supabase.createClient(ADMIN_CONFIG.supabaseUrl,ADMIN_CONFIG.supabaseAnonKey,{auth:{persistSession:false},realtime:{params:{eventsPerSecond:10}}});
     return client;
   }
-  function loadSession(){ try{return JSON.parse(localStorage.getItem(SESSION_KEY)||'null');}catch(_e){return null;} }
-  function saveSession(value){ session=value; if(value)localStorage.setItem(SESSION_KEY,JSON.stringify(value)); else localStorage.removeItem(SESSION_KEY); }
-  function setStatus(message,type=''){ const box=$('employeeStatus'); box.textContent=message; box.className=`employee-status ${type}`.trim(); }
-  function showDesk(){ $('employeeLoginScreen').hidden=true; $('employeeDesk').hidden=false; $('employeeSessionName').textContent=session?.username||'Employee'; startInventoryRealtime(); setTimeout(()=>$('employeeBarcodeInput')?.focus(),50); }
-  function showLogin(message=''){
-    stopInventoryRealtime();
-    saveSession(null); currentProduct=null; $('employeeDesk').hidden=true; $('employeeLoginScreen').hidden=false; $('employeeProductResult').innerHTML=''; $('employeeLoginError').textContent=message; setTimeout(()=>$('employeeLoginUsername')?.focus(),50);
-  }
-  function stockText(value){ const n=Math.max(0,Number(value||0)); return `${n} available`; }
-  function manualAvailable(status){ return clean(status || 'in_stock') !== 'out_of_stock'; }
-  function variantAvailable(product,v){ if(!manualAvailable(product?.stock_status)) return false; return Boolean(product?.track_inventory) ? (manualAvailable(v?.stock_status) && Number(v?.stock||0)>0) : manualAvailable(v?.stock_status); }
-  function money(value){ return `₹${Number(value||0).toLocaleString('en-IN')}`; }
+  function loadSession(){try{return JSON.parse(localStorage.getItem(SESSION_KEY)||'null');}catch(_e){return null;}}
+  function saveSession(value){session=value;if(value)localStorage.setItem(SESSION_KEY,JSON.stringify(value));else localStorage.removeItem(SESSION_KEY);}
+  function setStatus(message,type=''){const box=$('employeeStatus');if(!box)return;box.textContent=message;box.className=`employee-status ${type}`.trim();}
+  function setManageStatus(message,type=''){const box=$('employeeManageStatus');if(!box)return;box.textContent=message;box.className=`employee-status ${type}`.trim();}
+  function showDesk(){$('employeeLoginScreen').hidden=true;$('employeeDesk').hidden=false;$('employeeSessionName').textContent=session?.username||'Employee';startInventoryRealtime();switchEmployeeView('sale');setTimeout(()=>$('employeeBarcodeInput')?.focus(),50);}
+  function showLogin(message=''){stopInventoryRealtime();saveSession(null);currentProduct=null;$('employeeDesk').hidden=true;$('employeeLoginScreen').hidden=false;$('employeeProductResult').innerHTML='';$('employeeLoginError').textContent=message;setTimeout(()=>$('employeeLoginUsername')?.focus(),50);}
+  function sessionError(error){if(/expired|login/i.test(error?.message||'')){showLogin('Session expired. Login again.');return true;}return false;}
+  function stockText(value){const n=Math.max(0,Number(value||0));return `${n} available`;}
+  function money(value){const n=Number(value||0);return n>0?`₹${n.toLocaleString('en-IN')}`:'';}
   function imageUrl(value){const u=clean(value);if(!u)return '';return u.includes('/storage/v1/object/public/')&&!u.includes('?')?`${u}?width=360&quality=72`:u;}
-  function productOptionName(product){
-    const explicit=clean(product?.option_title); if(explicit)return explicit;
-    const values=variantsOf(product).map(v=>clean(v.size)).join(' ').toLowerCase();
-    if(/\b(ml|mg|g|kg|litre|liter|ltr|l)\b/.test(values))return 'Quantity';
-    if(/\b(metre|meter|mtr|cm|inch|ft)\b/.test(values))return 'Measurement';
-    return 'Size / option';
+  async function optimizeEmployeeImage(file){
+    if(!file||!file.type?.startsWith('image/'))throw new Error('Choose a valid image file.');
+    try{
+      const bitmap=await createImageBitmap(file),max=1400,scale=Math.min(1,max/Math.max(bitmap.width,bitmap.height)),w=Math.max(1,Math.round(bitmap.width*scale)),h=Math.max(1,Math.round(bitmap.height*scale)),canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;const ctx=canvas.getContext('2d',{alpha:false});ctx.drawImage(bitmap,0,0,w,h);bitmap.close?.();
+      const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/webp',.84));
+      if(blob)return {blob,extension:'webp',contentType:'image/webp'};
+    }catch(_e){}
+    const ext=(clean(file.name).split('.').pop()||'jpg').toLowerCase().replace(/[^a-z0-9]/g,'')||'jpg';
+    return {blob:file,extension:ext,contentType:file.type||'image/jpeg'};
   }
-  function variantsOf(product){ return Array.isArray(product?.variants)?product.variants:[]; }
-  function totalAvailable(product){
-    if(!product?.track_inventory) return null;
-    const vs=variantsOf(product); if(vs.length) return vs.reduce((sum,v)=>sum+Math.max(0,Number(v.stock||0)),0);
-    return Math.max(0,Number(product?.stock_quantity||0));
+  async function uploadEmployeeImage(file){
+    const prepared=await optimizeEmployeeImage(file);
+    const pathRes=await db().rpc('employee_create_upload_path',{p_token:session?.token||'',p_extension:prepared.extension});
+    if(pathRes.error)throw pathRes.error;
+    const path=clean(pathRes.data);if(!path)throw new Error('Could not prepare image upload.');
+    const {error}=await db().storage.from(ADMIN_CONFIG.storageBucket||'product-images').upload(path,prepared.blob,{contentType:prepared.contentType,upsert:false,cacheControl:'31536000'});
+    if(error)throw error;
+    const {data}=db().storage.from(ADMIN_CONFIG.storageBucket||'product-images').getPublicUrl(path);
+    return data?.publicUrl||'';
   }
-  function stockSummary(product){ const total=totalAvailable(product); return total===null ? (manualAvailable(product?.stock_status)?'Available · manual stock':'Out of stock') : stockText(total); }
+  function variantsOf(product){return Array.isArray(product?.variants)?product.variants:[];}
+  function totalAvailable(product){const vs=variantsOf(product);if(vs.length)return vs.reduce((sum,v)=>sum+Math.max(0,Number(v.stock||0)),0);return Math.max(0,Number(product?.stock_quantity||0));}
+
   function renderProduct(product){
-    currentProduct=product;
-    const box=$('employeeProductResult');
-    if(!product){ box.innerHTML='<div class="employee-empty-result"><b>No product found</b><p>Check the barcode and try again.</p></div>'; return; }
-    const variants=variantsOf(product);
-    const optionName=productOptionName(product);
-    const track=Boolean(product.track_inventory);
-    const firstAvailableIndex=variants.findIndex(x=>variantAvailable(product,x));
-    const grouped=new Map();
-    variants.forEach((v,index)=>{const colour=clean(v.color)||'Default';if(!grouped.has(colour))grouped.set(colour,[]);grouped.get(colour).push({v,index});});
-    const options=Array.from(grouped.entries()).map(([colour,items])=>`<section class="employee-colour-group ${colour==='Default'?'option-only':''}">${colour==='Default'?'':`<div class="employee-colour-head"><b>${esc(colour)}</b><small>${esc(track?stockText(items.reduce((sum,item)=>sum+Math.max(0,Number(item.v.stock||0)),0)):(items.some(item=>variantAvailable(product,item.v))?'Available':'Out of stock'))}</small></div>`}<div class="employee-size-grid">${items.map(({v,index})=>{
-      const availableQty=Math.max(0,Number(v.stock||0));
-      const available=variantAvailable(product,v);
-      const size=clean(v.size)||'Standard';
-      const availabilityText=track?stockText(availableQty):(available?'Available':'Out of stock');
-      return `<label class="employee-variant-option ${available?'':'sold-out'}"><input type="radio" name="employeeVariant" value="${esc(v.id)}" ${index===firstAvailableIndex?'checked':''} ${available?'':'disabled'}><span><b>${esc(optionName)} ${esc(size)}</b><small>${esc(availabilityText)}${Number(v.price||0)>0?` · ${esc(money(v.price))}`:''}</small></span></label>`;
-    }).join('')}</div></section>`).join('');
-    const noAvailable=variants.length?variants.every(v=>!variantAvailable(product,v)):(track?Number(product.stock_quantity||0)<=0:!manualAvailable(product.stock_status));
-    box.innerHTML=`<article class="employee-product-card">
-      <div class="employee-product-main"><div class="employee-product-photo">${product.image_url?`<img decoding="async" src="${esc(imageUrl(product.image_url))}" alt="">`:'<span>No image</span>'}</div><div>${product.barcode?`<small>Barcode ${esc(product.barcode)}</small>`:''}<h2>${esc(product.name)}</h2><b class="employee-total-stock">${esc(stockSummary(product))}</b></div></div>
-      ${!track?'<div class="employee-warning">Quantity tracking is off. Availability is controlled manually in Admin; sales can still be recorded.</div>':''}
-      ${variants.length?`<div class="employee-variant-list"><h3>${grouped.size===1&&grouped.has('Default')?`Select ${esc(optionName)}`:`Select exact colour + ${esc(optionName)}`}</h3>${options}</div>`:'<div class="employee-standard-stock"><b>Standard item</b><span>'+esc(track?stockText(product.stock_quantity):(manualAvailable(product.stock_status)?'Available':'Out of stock'))+'</span></div>'}
-      <form id="employeeSaleForm" class="employee-sale-form"><label>Sold quantity<input id="employeeSaleQty" type="number" min="1" step="1" inputmode="numeric" value="1" required></label><button type="submit" ${noAvailable?'disabled':''}>Mark Sold</button></form>
-    </article>`;
+    currentProduct=product;const box=$('employeeProductResult');
+    if(!product){box.innerHTML='<div class="employee-empty-result"><b>No product found</b><p>Check the barcode and try again.</p></div>';return;}
+    const variants=variantsOf(product),track=Boolean(product.track_inventory);
+    const firstAvailableIndex=variants.findIndex(x=>clean(x.stock_status||'in_stock')!=='out_of_stock'&&Number(x.stock||0)>0);
+    const grouped=new Map();variants.forEach((v,index)=>{const colour=clean(v.color)||'Default';if(!grouped.has(colour))grouped.set(colour,[]);grouped.get(colour).push({v,index});});
+    const options=Array.from(grouped.entries()).map(([colour,items])=>`<section class="employee-colour-group"><div class="employee-colour-head"><b>${esc(colour)}</b><small>${esc(stockText(items.reduce((sum,item)=>sum+Math.max(0,Number(item.v.stock||0)),0)))}</small></div><div class="employee-size-grid">${items.map(({v,index})=>{const available=Math.max(0,Number(v.stock||0)),sold=clean(v.stock_status)==='out_of_stock'||available<=0,size=clean(v.size)||'Standard';return `<label class="employee-variant-option ${sold?'sold-out':''}"><input type="radio" name="employeeVariant" value="${esc(v.id)}" ${index===firstAvailableIndex?'checked':''} ${sold?'disabled':''}><span><b>${esc(size)}</b><small>${esc(stockText(available))}${Number(v.price||0)>0?` · ${esc(money(v.price))}`:''}</small></span></label>`;}).join('')}</div></section>`).join('');
+    const noAvailable=variants.length?variants.every(v=>clean(v.stock_status)==='out_of_stock'||Number(v.stock||0)<=0):Number(product.stock_quantity||0)<=0;
+    box.innerHTML=`<article class="employee-product-card"><div class="employee-product-main"><div class="employee-product-photo">${product.image_url?`<img decoding="async" src="${esc(imageUrl(product.image_url))}" alt="">`:'<span>No image</span>'}</div><div><small>Barcode ${esc(product.barcode)}</small><h2>${esc(product.name)}</h2><b class="employee-total-stock">${esc(stockText(totalAvailable(product)))}</b></div></div>${!track?'<div class="employee-warning">Stock tracking is off for this product. Turn it on before recording quantity-based sales.</div>':''}${variants.length?`<div class="employee-variant-list"><h3>Select exact option</h3>${options}</div>`:'<div class="employee-standard-stock"><b>Standard item</b><span>'+esc(stockText(product.stock_quantity))+'</span></div>'}<form id="employeeSaleForm" class="employee-sale-form"><label>Sold quantity<input id="employeeSaleQty" type="number" min="1" step="1" inputmode="numeric" value="1" required></label><button type="submit" ${!track||noAvailable?'disabled':''}>Mark Sold</button></form></article>`;
     $('employeeSaleForm')?.addEventListener('submit',recordSale);
   }
-  function renderSearchResults(rows){
-    searchResults=Array.isArray(rows)?rows:[];
-    currentProduct=null;
-    const box=$('employeeProductResult');
-    if(!searchResults.length){renderProduct(null);return;}
-    if(searchResults.length===1){renderProduct(searchResults[0]);return;}
-    box.innerHTML=`<div class="employee-search-results"><div class="employee-search-results-head"><b>${searchResults.length} products found</b><small>Choose the correct item to record a sale.</small></div>${searchResults.map((product,index)=>`<button type="button" data-employee-result="${index}"><span class="employee-search-photo">${product.image_url?`<img src="${esc(imageUrl(product.image_url))}" alt="">`:'No image'}</span><span><b>${esc(product.name)}</b><small>${product.barcode?`Barcode ${esc(product.barcode)} · `:''}${esc(stockSummary(product))}</small></span><strong>Select</strong></button>`).join('')}</div>`;
-  }
-  async function ensureBroadcast(){
-    if(channelReady&&channel)return channel;
-    if(channel){try{db().removeChannel(channel);}catch(_e){}}
-    channel=db().channel(STORE_CHANNEL_NAME,{config:{broadcast:{self:false,ack:true}}});
-    await new Promise(resolve=>{
-      let done=false; const finish=()=>{if(done)return;done=true;resolve();};
-      channel.subscribe(status=>{if(status==='SUBSCRIBED'){channelReady=true;finish();} if(['CHANNEL_ERROR','TIMED_OUT','CLOSED'].includes(status)){channelReady=false;finish();}});
-      setTimeout(finish,700);
-    });
-    return channel;
-  }
-  async function broadcastStock(productId,variantId){
-    try{
-      const ch=await ensureBroadcast(); if(!ch||!channelReady)return;
-      await ch.send({type:'broadcast',event:STORE_EVENT_NAME,payload:{tables:['products','product_variants'],action:'employee-sale',details:{productId,variantId:variantId||null},eventId:`employee-${Date.now()}-${Math.random().toString(36).slice(2)}`,at:Date.now()}});
-    }catch(_e){}
-  }
-  function stopInventoryRealtime(){if(inventoryRefreshTimer){clearTimeout(inventoryRefreshTimer);inventoryRefreshTimer=null;}if(inventoryChannel){try{db().removeChannel(inventoryChannel);}catch(_e){}inventoryChannel=null;}}
-  function startInventoryRealtime(){
-    if(inventoryChannel)return;
-    try{
-      inventoryChannel=db().channel('wellone-employee-inventory-v88');
-      ['products','product_variants'].forEach(table=>inventoryChannel.on('postgres_changes',{event:'*',schema:'public',table},payload=>{
-        if(!currentProduct)return;
-        const row=payload?.new||payload?.old||{};
-        if(table==='products'&&clean(row.id)!==clean(currentProduct.id))return;
-        if(table==='product_variants'&&row.product_id&&clean(row.product_id)!==clean(currentProduct.id))return;
-        clearTimeout(inventoryRefreshTimer);
-        inventoryRefreshTimer=setTimeout(async()=>{
-          try{const {data,error}=await db().rpc('employee_get_product',{p_token:session?.token||'',p_product_id:currentProduct?.id});if(!error&&data)renderProduct(data);}catch(_e){}
-        },90);
-      }));
-      inventoryChannel.subscribe();
-    }catch(_e){inventoryChannel=null;}
-  }
-  async function login(event){
-    event.preventDefault(); $('employeeLoginError').textContent='Checking...';
-    const username=clean($('employeeLoginUsername').value),password=$('employeeLoginPassword').value||'';
-    try{
-      const {data,error}=await db().rpc('employee_login',{p_username:username,p_password:password});
-      if(error)throw error;
-      saveSession(data); $('employeeLoginPassword').value=''; $('employeeLoginError').textContent=''; showDesk();
-    }catch(error){ $('employeeLoginError').textContent=error.message||'Login failed.'; }
-  }
-  async function findBarcode(event){
-    event?.preventDefault(); const query=clean($('employeeBarcodeInput').value); if(!query)return;
-    setStatus('Searching products...','loading'); $('employeeProductResult').innerHTML='';
-    try{
-      let {data,error}=await db().rpc('employee_search_products',{p_token:session?.token||'',p_query:query});
-      if(error&&/employee_search_products|function|schema cache/i.test(error.message||'')){
-        const fallback=await db().rpc('employee_get_product_by_barcode',{p_token:session?.token||'',p_barcode:query});
-        data=fallback.data?[fallback.data]:[]; error=fallback.error;
-      }
-      if(error)throw error;
-      const rows=Array.isArray(data)?data:[];
-      renderSearchResults(rows); setStatus(rows.length?`${rows.length} product${rows.length===1?'':'s'} found.`:'No matching product found.',rows.length?'ok':'error');
-    }catch(error){
-      if(/expired|login/i.test(error.message||'')){showLogin('Session expired. Login again.');return;}
-      setStatus(error.message||'Could not load item.','error');
-    }
-  }
-  async function recordSale(event){
-    event.preventDefault(); if(!currentProduct)return;
-    const variants=variantsOf(currentProduct); const selected=document.querySelector('input[name="employeeVariant"]:checked');
-    if(variants.length&&!selected){setStatus('Select an available colour and size.','error');return;}
-    const qty=Math.max(1,Number($('employeeSaleQty')?.value||1));
-    const variantId=selected?.value||null;
-    const button=event.currentTarget.querySelector('button'); button.disabled=true; setStatus('Saving sale...','loading');
-    try{
-      const {data,error}=await db().rpc('employee_record_sale',{p_token:session?.token||'',p_product_id:currentProduct.id,p_variant_id:variantId,p_quantity:qty});
-      if(error)throw error;
-      renderProduct(data); setStatus(currentProduct.track_inventory?`Sold ${qty} unit${qty===1?'':'s'}. Stock updated live.`:`Sale recorded (${qty}). Availability remains manual.`,'ok');
-      broadcastStock(currentProduct.id,variantId).catch(()=>{});
-    }catch(error){
-      if(/expired|login/i.test(error.message||'')){showLogin('Session expired. Login again.');return;}
-      setStatus(error.message||'Could not record sale.','error'); button.disabled=false;
-    }
-  }
-  function logout(){ stopInventoryRealtime(); if(channel){try{db().removeChannel(channel);}catch(_e){}} channel=null;channelReady=false;showLogin(''); }
 
-  $('employeeLoginForm').addEventListener('submit',login);
-  $('employeeBarcodeForm').addEventListener('submit',findBarcode);
-  $('employeeLogoutBtn').addEventListener('click',logout);
-  $('employeeProductResult').addEventListener('click',event=>{const button=event.target.closest('[data-employee-result]');if(!button)return;const product=searchResults[Number(button.dataset.employeeResult)];if(product){renderProduct(product);setStatus(`${product.name} loaded.`,'ok');}});
-  session=loadSession(); if(session?.token&&session?.username)showDesk(); else showLogin('');
+  async function ensureBroadcast(){
+    if(channelReady&&channel)return channel;if(channel){try{db().removeChannel(channel);}catch(_e){}}
+    channel=db().channel(STORE_CHANNEL_NAME,{config:{broadcast:{self:false,ack:true}}});
+    await new Promise(resolve=>{let done=false;const finish=()=>{if(done)return;done=true;resolve();};channel.subscribe(status=>{if(status==='SUBSCRIBED'){channelReady=true;finish();}if(['CHANNEL_ERROR','TIMED_OUT','CLOSED'].includes(status)){channelReady=false;finish();}});setTimeout(finish,700);});return channel;
+  }
+  async function broadcastChange(action,details={}){try{const ch=await ensureBroadcast();if(!ch||!channelReady)return;await ch.send({type:'broadcast',event:STORE_EVENT_NAME,payload:{tables:['products','product_variants'],action,details,eventId:`employee-${Date.now()}-${Math.random().toString(36).slice(2)}`,at:Date.now()}});}catch(_e){}}
+  function stopInventoryRealtime(){if(inventoryRefreshTimer){clearTimeout(inventoryRefreshTimer);inventoryRefreshTimer=null;}if(inventoryChannel){try{db().removeChannel(inventoryChannel);}catch(_e){}inventoryChannel=null;}}
+  function startInventoryRealtime(){if(inventoryChannel)return;try{inventoryChannel=db().channel('wellone-employee-inventory-v100');['products','product_variants'].forEach(table=>inventoryChannel.on('postgres_changes',{event:'*',schema:'public',table},payload=>{if(!currentProduct)return;const row=payload?.new||payload?.old||{};if(table==='products'&&clean(row.id)!==clean(currentProduct.id))return;if(table==='product_variants'&&row.product_id&&clean(row.product_id)!==clean(currentProduct.id))return;clearTimeout(inventoryRefreshTimer);inventoryRefreshTimer=setTimeout(async()=>{try{const {data,error}=await db().rpc('employee_get_product_by_barcode',{p_token:session?.token||'',p_barcode:currentProduct?.barcode||''});if(!error&&data)renderProduct(data);}catch(_e){}},90);}));inventoryChannel.subscribe();}catch(_e){inventoryChannel=null;}}
+
+  async function login(event){event.preventDefault();$('employeeLoginError').textContent='Checking...';const username=clean($('employeeLoginUsername').value),password=$('employeeLoginPassword').value||'';try{const {data,error}=await db().rpc('employee_login',{p_username:username,p_password:password});if(error)throw error;saveSession(data);$('employeeLoginPassword').value='';$('employeeLoginError').textContent='';showDesk();}catch(error){$('employeeLoginError').textContent=error.message||'Login failed.';}}
+  async function findBarcode(event){event?.preventDefault();const barcode=clean($('employeeBarcodeInput').value);if(!barcode)return;setStatus('Finding item...','loading');$('employeeProductResult').innerHTML='';try{const {data,error}=await db().rpc('employee_get_product_by_barcode',{p_token:session?.token||'',p_barcode:barcode});if(error)throw error;if(!data){renderProduct(null);setStatus('Barcode not found.','error');return;}renderProduct(data);setStatus(`${data.name} loaded.`,'ok');}catch(error){if(sessionError(error))return;setStatus(error.message||'Could not load item.','error');}}
+  async function recordSale(event){event.preventDefault();if(!currentProduct)return;const variants=variantsOf(currentProduct),selected=document.querySelector('input[name="employeeVariant"]:checked');if(variants.length&&!selected){setStatus('Select an available option.','error');return;}const qty=Math.max(1,Number($('employeeSaleQty')?.value||1)),variantId=selected?.value||null,button=event.currentTarget.querySelector('button');button.disabled=true;setStatus('Saving sale...','loading');try{const {data,error}=await db().rpc('employee_record_sale',{p_token:session?.token||'',p_product_id:currentProduct.id,p_variant_id:variantId,p_quantity:qty});if(error)throw error;renderProduct(data);setStatus(`Sold ${qty} unit${qty===1?'':'s'}. Stock updated live.`,'ok');broadcastChange('employee-sale',{productId:currentProduct.id,variantId}).catch(()=>{});}catch(error){if(sessionError(error))return;setStatus(error.message||'Could not record sale.','error');button.disabled=false;}}
+
+  function switchEmployeeView(view){
+    const manage=view==='manage';$('employeeSaleView').hidden=manage;$('employeeManageView').hidden=!manage;document.querySelectorAll('[data-employee-view]').forEach(btn=>btn.classList.toggle('active',btn.dataset.employeeView===view));
+    if(manage){loadManageMeta().then(()=>loadManageProducts()).catch(error=>{if(!sessionError(error))setManageStatus(error.message||'Could not open manager.','error');});}
+  }
+  async function loadManageMeta(){if(manageMeta.categories.length)return manageMeta;const {data,error}=await db().rpc('employee_manage_meta',{p_token:session?.token||''});if(error)throw error;manageMeta={categories:Array.isArray(data?.categories)?data.categories:[],subcategories:Array.isArray(data?.subcategories)?data.subcategories:[]};fillCategoryOptions();return manageMeta;}
+  function fillCategoryOptions(selectedCategory='',selectedSub=''){
+    const category=$('employeeCategory');if(!category)return;category.innerHTML='<option value="">Select category</option>'+manageMeta.categories.map(c=>`<option value="${esc(c.id)}" ${clean(c.id)===clean(selectedCategory)?'selected':''}>${esc(c.name)}</option>`).join('');
+    fillSubcategoryOptions(selectedSub);
+  }
+  function fillSubcategoryOptions(selected=''){const categoryId=clean($('employeeCategory')?.value);const sub=$('employeeSubcategory');if(!sub)return;const list=manageMeta.subcategories.filter(x=>clean(x.category_id)===categoryId);sub.innerHTML='<option value="">No subcategory</option>'+list.map(x=>`<option value="${esc(x.id)}" ${clean(x.id)===clean(selected)?'selected':''}>${esc(x.name)}</option>`).join('');}
+  async function loadManageProducts(event){event?.preventDefault();setManageStatus('Loading products...','loading');const q=clean($('employeeManageSearch')?.value);const {data,error}=await db().rpc('employee_manage_list_products',{p_token:session?.token||'',p_query:q});if(error)throw error;manageProducts=Array.isArray(data)?data:[];renderManageProducts();setManageStatus(`${manageProducts.length} product${manageProducts.length===1?'':'s'} loaded.`,'ok');}
+  function renderManageProducts(){const box=$('employeeManageList');box.innerHTML=manageProducts.length?manageProducts.map(p=>`<article class="employee-manage-item"><div class="employee-manage-thumb">${p.image_url?`<img src="${esc(imageUrl(p.image_url))}" alt="">`:'<span>No image</span>'}</div><div><b>${esc(p.name)}</b><small>${esc(p.category_name||'Uncategorised')}${p.subcategory_name?' · '+esc(p.subcategory_name):''}</small><small>${p.barcode?`Barcode ${esc(p.barcode)} · `:''}${p.variant_count?`${esc(p.variant_count)} option${Number(p.variant_count)===1?'':'s'} · `:''}${p.stock_status==='out_of_stock'?'Out of stock':p.status==='hidden'?'Hidden':'Available'}</small></div><button type="button" data-manage-edit="${esc(p.id)}">Edit</button></article>`).join(''):'<div class="employee-empty-result"><b>No products found</b><p>Try another search or add a new product.</p></div>';}
+
+  function resetProductForm(){
+    $('employeeProductForm').reset();employeeMainImageFile=null;$('employeeEditProductId').value='';$('employeeProductFormTitle').textContent='Add product';$('employeeAvailability').value='in_stock';$('employeeVariantMode').value='simple';$('employeeStockQuantity').value='0';$('employeeVariantList').innerHTML='';fillCategoryOptions();updateManageVariantMode();updateImagePreview();$('employeeProductForm').hidden=false;$('employeeProductForm').scrollIntoView({behavior:'smooth',block:'start'});
+  }
+  async function openManageProduct(id){setManageStatus('Opening product...','loading');const {data,error}=await db().rpc('employee_manage_get_product',{p_token:session?.token||'',p_product_id:id});if(error)throw error;await loadManageMeta();employeeMainImageFile=null;$('employeeEditProductId').value=data.id||'';$('employeeProductFormTitle').textContent='Edit product';fillCategoryOptions(data.category_id||'',data.subcategory_id||'');$('employeeProductName').value=data.name||'';$('employeeSearchKeywords').value=data.search_keywords||'';$('employeeDescription').value=data.description||'';$('employeeMrp').value=data.mrp??'';$('employeePrice').value=data.price??'';$('employeeImageUrl').value=data.image_url||'';$('employeeAvailability').value=data.status==='hidden'?'hidden':(data.stock_status==='out_of_stock'?'out_of_stock':'in_stock');$('employeeBarcode').value=data.barcode||'';$('employeeBarcodeEnabled').checked=Boolean(data.barcode_enabled);$('employeeTrackInventory').checked=Boolean(data.track_inventory);$('employeeStockQuantity').value=String(data.stock_quantity||0);$('employeeOptionTitle').value=data.option_title||'';const variants=Array.isArray(data.variants)?data.variants:[];$('employeeVariantMode').value=variants.length?(variants.some(v=>clean(v.color))?'color_option':'option'):'simple';$('employeeVariantList').innerHTML='';variants.forEach(addManageVariantRow);updateManageVariantMode();updateImagePreview();$('employeeProductForm').hidden=false;$('employeeProductForm').scrollIntoView({behavior:'smooth',block:'start'});setManageStatus(`${data.name} ready to edit.`,'ok');}
+  function closeProductForm(){$('employeeProductForm').hidden=true;}
+  function updateImagePreview(){const url=employeeMainImageFile?URL.createObjectURL(employeeMainImageFile):clean($('employeeImageUrl')?.value),box=$('employeeImagePreview');if(!box)return;box.innerHTML=url?`<img src="${esc(imageUrl(url))}" alt="Product preview" onerror="this.parentElement.innerHTML='<span>Image could not be loaded</span>'">`:'';}
+  function updateManageVariantMode(){const mode=clean($('employeeVariantMode')?.value||'simple'),box=$('employeeVariantsBox');box.hidden=mode==='simple';$('employeeSimpleQtyWrap').hidden=mode!=='simple';document.querySelectorAll('.employee-manage-variant').forEach(row=>row.querySelector('.employee-variant-color-wrap').hidden=mode!=='color_option');if(mode!=='simple'&&!$('employeeVariantList').children.length)addManageVariantRow();}
+  function addManageVariantRow(data={}){const mode=clean($('employeeVariantMode')?.value||'option'),row=document.createElement('article');row.className='employee-manage-variant';row.dataset.variantId=clean(data.id);row.innerHTML=`<div class="employee-manage-variant-head"><b>Option</b><button type="button" data-remove-manage-variant>Remove</button></div><div class="employee-form-grid two"><label class="employee-variant-color-wrap" ${mode==='color_option'?'':'hidden'}>Colour<input class="emv-color" value="${esc(data.color||'')}" placeholder="Black"></label><label>Option / size<input class="emv-size" value="${esc(data.size||'')}" placeholder="6 / 500ml / Large" required></label></div><label>Variant image <small>Optional · choose a separate image for this exact option.</small><input class="emv-file" type="file" accept="image/*"><input class="emv-image" type="url" value="${esc(data.image_url||'')}" placeholder="Existing image URL"><small class="emv-file-name"></small></label><div class="employee-form-grid three"><label>MRP<input class="emv-mrp" inputmode="decimal" value="${esc(data.mrp??'')}"></label><label>Final price<input class="emv-price" inputmode="decimal" value="${esc(data.price??'')}"></label><label>Quantity<input class="emv-stock" type="number" min="0" step="1" value="${esc(data.stock??0)}"></label></div><label>Availability<select class="emv-status"><option value="in_stock" ${clean(data.stock_status||'in_stock')==='in_stock'?'selected':''}>Available</option><option value="out_of_stock" ${clean(data.stock_status)==='out_of_stock'?'selected':''}>Out of stock</option><option value="hidden" ${clean(data.stock_status)==='hidden'?'selected':''}>Hide option</option></select></label>`;$('employeeVariantList').appendChild(row);row.__imageFile=null;row.querySelector('.emv-file')?.addEventListener('change',event=>{row.__imageFile=event.target.files?.[0]||null;const label=row.querySelector('.emv-file-name');if(label)label.textContent=row.__imageFile?`Selected: ${row.__imageFile.name}`:'';});updateManageVariantMode();}
+  function collectManageVariants(){const mode=clean($('employeeVariantMode')?.value||'simple');if(mode==='simple')return[];return Array.from(document.querySelectorAll('.employee-manage-variant')).map((row,index)=>({id:clean(row.dataset.variantId),color:mode==='color_option'?clean(row.querySelector('.emv-color')?.value):'',size:clean(row.querySelector('.emv-size')?.value),mrp:clean(row.querySelector('.emv-mrp')?.value),price:clean(row.querySelector('.emv-price')?.value),image_url:clean(row.querySelector('.emv-image')?.value),__imageFile:row.__imageFile||null,stock:Math.max(0,Number(row.querySelector('.emv-stock')?.value||0)),stock_status:clean(row.querySelector('.emv-status')?.value||'in_stock'),sort_order:index}));}
+  async function saveManageProduct(event){
+    event.preventDefault();const button=$('employeeSaveProductBtn');button.disabled=true;setManageStatus('Saving product...','loading');
+    try{const mode=clean($('employeeVariantMode').value),variants=collectManageVariants();if(mode!=='simple'&&!variants.length)throw new Error('Add at least one option.');for(const v of variants){if(!v.size)throw new Error('Enter every option / size.');if(mode==='color_option'&&!v.color)throw new Error('Enter a colour for every colour + option row.');}
+      let mainImageUrl=clean($('employeeImageUrl').value);if(employeeMainImageFile){setManageStatus('Uploading product image...','loading');mainImageUrl=await uploadEmployeeImage(employeeMainImageFile);}
+      for(let i=0;i<variants.length;i+=1){if(variants[i].__imageFile){setManageStatus(`Uploading option image ${i+1} of ${variants.length}...`,'loading');variants[i].image_url=await uploadEmployeeImage(variants[i].__imageFile);}delete variants[i].__imageFile;}
+      const product={id:clean($('employeeEditProductId').value),category_id:clean($('employeeCategory').value),subcategory_id:clean($('employeeSubcategory').value),name:clean($('employeeProductName').value),search_keywords:[...new Map(clean($('employeeSearchKeywords').value).split(/[,\n]+/).map(clean).filter(Boolean).map(x=>[key(x),x])).values()].join(', '),description:clean($('employeeDescription').value),mrp:clean($('employeeMrp').value),price:clean($('employeePrice').value),image_url:mainImageUrl,status:$('employeeAvailability').value==='hidden'?'hidden':'active',stock_status:$('employeeAvailability').value==='out_of_stock'?'out_of_stock':'in_stock',stock_quantity:Math.max(0,Number($('employeeStockQuantity').value||0)),track_inventory:Boolean($('employeeTrackInventory').checked),barcode:clean($('employeeBarcode').value),barcode_enabled:Boolean($('employeeBarcodeEnabled').checked),option_title:mode==='simple'?'':clean($('employeeOptionTitle').value)};
+      if(!product.category_id)throw new Error('Select category.');if(!product.name)throw new Error('Enter product name.');if(!product.price&&!variants.some(v=>v.price))throw new Error('Enter a product price or option prices.');
+      const {data,error}=await db().rpc('employee_manage_save_product',{p_token:session?.token||'',p_product:product,p_variants:variants});if(error)throw error;setManageStatus(`${data.name} saved. Customer store will refresh live.`,'ok');broadcastChange(product.id?'employee-product-update':'employee-product-insert',{productId:data.id}).catch(()=>{});closeProductForm();await loadManageProducts();
+    }catch(error){if(sessionError(error))return;setManageStatus(error.message||'Could not save product.','error');}finally{button.disabled=false;}
+  }
+
+  function logout(){stopInventoryRealtime();if(channel){try{db().removeChannel(channel);}catch(_e){}}channel=null;channelReady=false;showLogin('');}
+  $('employeeLoginForm').addEventListener('submit',login);$('employeeBarcodeForm').addEventListener('submit',findBarcode);$('employeeLogoutBtn').addEventListener('click',logout);
+  document.querySelectorAll('[data-employee-view]').forEach(btn=>btn.addEventListener('click',()=>switchEmployeeView(btn.dataset.employeeView)));
+  $('employeeManageSearchForm')?.addEventListener('submit',event=>loadManageProducts(event).catch(error=>{if(!sessionError(error))setManageStatus(error.message,'error');}));
+  $('employeeNewProductBtn')?.addEventListener('click',resetProductForm);$('employeeCloseProductForm')?.addEventListener('click',closeProductForm);$('employeeCancelProductBtn')?.addEventListener('click',closeProductForm);$('employeeProductForm')?.addEventListener('submit',saveManageProduct);
+  $('employeeCategory')?.addEventListener('change',()=>fillSubcategoryOptions());$('employeeVariantMode')?.addEventListener('change',updateManageVariantMode);$('employeeAddVariantBtn')?.addEventListener('click',()=>addManageVariantRow());$('employeeImageUrl')?.addEventListener('input',updateImagePreview);$('employeeMainImageFile')?.addEventListener('change',event=>{employeeMainImageFile=event.target.files?.[0]||null;updateImagePreview();});
+  $('employeeManageList')?.addEventListener('click',event=>{const edit=event.target.closest('[data-manage-edit]');if(edit)openManageProduct(edit.dataset.manageEdit).catch(error=>{if(!sessionError(error))setManageStatus(error.message,'error');});});
+  $('employeeVariantList')?.addEventListener('click',event=>{const remove=event.target.closest('[data-remove-manage-variant]');if(remove){remove.closest('.employee-manage-variant')?.remove();if(!$('employeeVariantList').children.length&&$('employeeVariantMode').value!=='simple')addManageVariantRow();}});
+  session=loadSession();if(session?.token&&session?.username)showDesk();else showLogin('');
 })();

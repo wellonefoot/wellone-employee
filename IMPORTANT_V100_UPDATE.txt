@@ -1,0 +1,19 @@
+WELLONE UPDATE — IMPORTANT
+
+Before deploying the updated Admin / Customer / Employee sites, run this file ONCE in Supabase SQL Editor:
+
+  supabase/14_search_keywords_staff_manage.sql
+
+It adds:
+- hidden product search_keywords used by customer search
+- secure employee product-management RPC functions
+- short-lived employee image-upload capability paths for the existing product-images bucket
+
+Then deploy the updated sites.
+
+Cache versions in this release:
+- Admin: wellone-admin-v100-search-variant-images
+- Customer: wellone-customer-v104-search-filter-availability
+- Employee: wellone-employee-v100-product-manager
+
+No existing products are deleted or rewritten by this migration.

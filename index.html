@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <title>Wellone Employee</title>
   <link rel="preconnect" href="https://wnavzhrkwgnegjdetdno.supabase.co">
-  <link rel="stylesheet" href="css/admin.css?v=88">
+  <link rel="stylesheet" href="css/admin.css?v=100">
   <link rel="icon" href="assets/favicon/favicon.ico">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="assets/favicon/apple-icon-180x180.png">
@@ -15,7 +15,7 @@
 <body class="employee-page-body">
   <section id="employeeLoginScreen" class="employee-login-screen">
     <form id="employeeLoginForm" class="employee-login-card">
-      <img src="assets/logo.png?v=88" alt="Wellone">
+      <img src="assets/logo.png?v=100" alt="Wellone">
       <p class="tag">employee stock desk</p>
       <h1>Employee Login</h1>
       <p>Use the username and password created by the admin.</p>
@@ -28,24 +28,78 @@
 
   <main id="employeeDesk" class="employee-desk" hidden>
     <header class="employee-topbar">
-      <a href="index.html" class="employee-brand"><img src="assets/logo.png?v=88" alt="Wellone"></a>
+      <a href="index.html" class="employee-brand"><img src="assets/logo.png?v=100" alt="Wellone"></a>
       <div><small>Signed in as</small><b id="employeeSessionName">Employee</b></div>
       <button id="employeeLogoutBtn" type="button">Logout</button>
     </header>
 
-    <section class="employee-work-card">
-      <div class="employee-work-title"><p class="tag">stock sale</p><h1>Find a product</h1><p>Search by product name or barcode, choose the exact available colour and option, then record the sold quantity.</p></div>
+    <nav class="employee-mode-tabs" aria-label="Employee tools">
+      <button class="active" data-employee-view="sale" type="button">Sale</button>
+      <button data-employee-view="manage" type="button">Manage</button>
+    </nav>
+
+    <section id="employeeSaleView" class="employee-work-card">
+      <div class="employee-work-title"><p class="tag">stock sale</p><h1>Type product barcode</h1><p>Find the item, choose its exact colour and size, then mark the sold quantity.</p></div>
       <form id="employeeBarcodeForm" class="employee-barcode-form">
-        <input id="employeeBarcodeInput" inputmode="search" autocomplete="off" placeholder="Product name or barcode" required>
-        <button type="submit">Search</button>
+        <input id="employeeBarcodeInput" inputmode="text" autocomplete="off" placeholder="Enter barcode" required>
+        <button type="submit">Find Item</button>
       </form>
       <div id="employeeStatus" class="employee-status">Ready.</div>
       <div id="employeeProductResult" class="employee-product-result"></div>
     </section>
+
+    <section id="employeeManageView" class="employee-manage-view" hidden>
+      <div class="employee-manage-toolbar">
+        <div><p class="tag">product manager</p><h1>Manage items</h1><p>Add or edit products without leaving the staff page.</p></div>
+        <button id="employeeNewProductBtn" class="employee-primary-soft" type="button">+ Add product</button>
+      </div>
+      <form id="employeeManageSearchForm" class="employee-manage-search">
+        <input id="employeeManageSearch" autocomplete="off" placeholder="Search name, barcode or hidden keyword">
+        <button type="submit">Search</button>
+      </form>
+      <div id="employeeManageStatus" class="employee-status">Ready.</div>
+      <div id="employeeManageList" class="employee-manage-list"></div>
+
+      <form id="employeeProductForm" class="employee-product-form" hidden>
+        <input id="employeeEditProductId" type="hidden">
+        <div class="employee-form-head"><div><p class="tag">item editor</p><h2 id="employeeProductFormTitle">Add product</h2></div><button id="employeeCloseProductForm" type="button">Close</button></div>
+        <div class="employee-form-grid two">
+          <label>Category<select id="employeeCategory" required><option value="">Select category</option></select></label>
+          <label>Subcategory<select id="employeeSubcategory"><option value="">No subcategory</option></select></label>
+        </div>
+        <label>Product name<input id="employeeProductName" required placeholder="Product name"></label>
+        <label>Search keywords <small>Hidden from customers · separate with commas</small><textarea id="employeeSearchKeywords" rows="2" placeholder="V strap, strap sandal, casual footwear"></textarea></label>
+        <label>Description<textarea id="employeeDescription" rows="3" placeholder="Short product detail"></textarea></label>
+        <div class="employee-form-grid two">
+          <label>MRP<input id="employeeMrp" inputmode="decimal" placeholder="1099"></label>
+          <label>Final price<input id="employeePrice" inputmode="decimal" placeholder="679" required></label>
+        </div>
+        <label>Main product image <small>Choose a new image, or keep/paste an existing hosted image URL.</small><input id="employeeMainImageFile" type="file" accept="image/*"><input id="employeeImageUrl" type="url" placeholder="https://..."></label>
+        <div id="employeeImagePreview" class="employee-manage-image-preview"></div>
+        <div class="employee-form-grid two">
+          <label>Availability<select id="employeeAvailability"><option value="in_stock">Available</option><option value="out_of_stock">Out of stock</option><option value="hidden">Hide product</option></select></label>
+          <label>Product type<select id="employeeVariantMode"><option value="simple">Simple product</option><option value="option">One option</option><option value="color_option">Colour + option</option></select></label>
+        </div>
+        <div class="employee-form-grid two">
+          <label>Barcode<input id="employeeBarcode" placeholder="Barcode"></label>
+          <label>Option title<input id="employeeOptionTitle" placeholder="Size / Quantity / ml / Pack"></label>
+        </div>
+        <div class="employee-switch-row"><span><b>Barcode identification</b><small>Use this barcode in the Sale tab.</small></span><input id="employeeBarcodeEnabled" type="checkbox"></div>
+        <div class="employee-switch-row"><span><b>Track stock quantity</b><small>Track available units for the product/options.</small></span><input id="employeeTrackInventory" type="checkbox"></div>
+        <label id="employeeSimpleQtyWrap">Available quantity<input id="employeeStockQuantity" type="number" min="0" step="1" value="0"></label>
+
+        <section id="employeeVariantsBox" class="employee-variants-box" hidden>
+          <div class="employee-variants-head"><div><b>Exact options</b><small>Each one-option row can keep its own image URL, rate and stock.</small></div><button id="employeeAddVariantBtn" type="button">+ Add option</button></div>
+          <div id="employeeVariantList" class="employee-variant-editor-list"></div>
+        </section>
+
+        <div class="employee-form-actions"><button id="employeeCancelProductBtn" type="button">Cancel</button><button id="employeeSaveProductBtn" class="employee-save-product" type="submit">Save product</button></div>
+      </form>
+    </section>
   </main>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="js/employee.bundle.js?v=88"></script>
-  <script src="js/pwa-install.js?v=88"></script>
+  <script src="js/employee.bundle.js?v=100"></script>
+  <script src="js/pwa-install.js?v=100"></script>
 </body>
 </html>

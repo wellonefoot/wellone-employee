@@ -1,0 +1,4 @@
+WellOne v83 — employee
+
+This build is the cache/navigation reliability and performance cleanup after v82.
+No new SQL is required if the existing order/employee/exact-variant database migrations are already installed.

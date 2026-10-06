@@ -1,0 +1,9 @@
+SHOPIZO v108 — Sales Staff history
+
+- Each Sales Staff login remains a unique account.
+- Every Mark Sold action is permanently saved against that staff account.
+- New My History page groups sales by date and supports From / To / Today / All filters.
+- History shows transactions, units and sale value.
+- Existing employee_sale stock movements are backfilled into the new history table when possible.
+
+IMPORTANT: Run REQUIRED_V108_SUPABASE.sql once before using the new history page.

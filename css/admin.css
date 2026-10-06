@@ -371,4 +371,24 @@ body.employee-manage-open #employeeSaleView{display:none!important}
 @media(max-width:720px){.employee-mode-tabs{top:4px;margin-bottom:10px}.employee-mode-tabs button{min-height:46px;font-size:13px}.employee-work-card{content-visibility:auto;contain-intrinsic-size:500px}}
 
 /* v107 separate Sales portal */
-.employee-page-body #employeeSaleView{display:block!important}
+.employee-page-body #employeeSaleView.active{display:block!important}
+.employee-page-body #employeeSaleView:not(.active){display:none!important}
+
+
+/* v108 per-staff sales history */
+.employee-sales-tabs{position:static;top:auto;z-index:auto}
+.employee-history-card{display:grid;gap:16px}
+.employee-history-filters{display:grid;grid-template-columns:1fr 1fr auto auto auto;gap:8px;align-items:end}
+.employee-history-filters label{display:grid;gap:5px;font-size:10px;font-weight:900;color:#69715f;text-transform:uppercase;letter-spacing:.04em}
+.employee-history-filters input{min-height:44px;border:1px solid #dce6c6;border-radius:12px;background:#fff;padding:0 11px;font:inherit;color:#1b2230}
+.employee-history-filters button{min-height:44px;border:0;border-radius:12px;background:#1f2b0c;color:#fff;padding:0 14px;font-weight:950;cursor:pointer}
+.employee-history-filters button.secondary{background:#f2f6e8;color:#52620e;border:1px solid #dce6c6}
+.employee-history-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}
+.employee-history-summary>div{display:grid;gap:4px;padding:13px;border:1px solid #e0e9ca;border-radius:15px;background:#f9fcef}
+.employee-history-summary small{font-size:10px;font-weight:900;color:#76806b;text-transform:uppercase}.employee-history-summary b{font-size:20px;color:#25320d}
+.employee-history-status{padding:10px 12px;border-radius:12px;background:#f5f7f0;color:#67715f;font-size:11px;font-weight:850}.employee-history-status.loading{background:#fff7da;color:#80660b}.employee-history-status.ok{background:#eaf7dc;color:#52710b}.employee-history-status.error{background:#fff0f0;color:#a23c3c}
+.employee-history-list{display:grid;gap:14px}.employee-history-day{display:grid;gap:7px}.employee-history-day-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:0 2px}.employee-history-day-head b{font-size:13px}.employee-history-day-head span{font-size:10px;font-weight:900;color:#6f795f}
+.employee-history-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;padding:12px 13px;border:1px solid #e1e9cf;border-radius:14px;background:#fff}.employee-history-row>div:first-child{display:grid;gap:4px;min-width:0}.employee-history-row b{font-size:13px;overflow-wrap:anywhere}.employee-history-row small{font-size:10px;color:#747e69;font-weight:750}.employee-history-row-meta{display:grid;grid-template-columns:auto auto;gap:2px 8px;justify-items:end;align-items:center}.employee-history-row-meta strong{font-size:14px;color:#24310d}.employee-history-row-meta span{font-size:10px;color:#7b8472;font-weight:800}.employee-history-row-meta small{grid-column:1/-1;color:#536c0b;font-weight:900}
+.employee-history-empty{display:grid;gap:5px;text-align:center;padding:26px 15px;border:1px dashed #ccd8b2;border-radius:15px;color:#6f7865}.employee-history-empty b{color:#26320f}.employee-history-empty span{font-size:11px}
+@media(max-width:720px){.employee-history-filters{grid-template-columns:1fr 1fr}.employee-history-filters button{width:100%}.employee-history-summary{grid-template-columns:repeat(3,1fr)}.employee-history-summary b{font-size:16px}.employee-history-row{grid-template-columns:1fr auto}}
+@media(max-width:430px){.employee-history-filters{grid-template-columns:1fr 1fr}.employee-history-filters button:first-of-type{grid-column:1/-1}.employee-history-summary{gap:6px}.employee-history-summary>div{padding:10px 8px}.employee-history-summary small{font-size:8px}.employee-history-summary b{font-size:14px}}

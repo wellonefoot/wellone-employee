@@ -1,3 +1,7 @@
+SHOPIZO Sales Staff v108 — per-staff sales history
+1. Run REQUIRED_V108_SUPABASE.sql once in Supabase SQL Editor.
+2. Deploy this folder. Each Sales Staff login has its own history.
+
 WellOne Employee v88 — stable staff login + exact-option sales
 
 DATABASE

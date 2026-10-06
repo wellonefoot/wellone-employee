@@ -6,7 +6,7 @@
 <meta content="width=device-width,initial-scale=1,viewport-fit=cover" name="viewport"/>
 <title>SHOPIZO Sales Staff</title>
 <link href="https://wnavzhrkwgnegjdetdno.supabase.co" rel="preconnect"/>
-<link href="css/admin.css?v=107" rel="stylesheet"/>
+<link href="css/admin.css?v=108" rel="stylesheet"/>
 <link href="assets/favicon/favicon.ico" rel="icon"/>
 <link href="manifest.webmanifest" rel="manifest"/>
 <link href="assets/favicon/apple-icon-180x180.png" rel="apple-touch-icon"/>
@@ -32,6 +32,10 @@
 <div><small>Signed in as</small><b id="employeeSessionName">Employee</b></div>
 <button id="employeeLogoutBtn" type="button">Logout</button>
 </header>
+<div class="employee-mode-tabs employee-sales-tabs" role="tablist" aria-label="Sales staff pages">
+<button class="active" id="employeeSellTab" type="button" role="tab" aria-selected="true">Sell</button>
+<button id="employeeHistoryTab" type="button" role="tab" aria-selected="false">My History</button>
+</div>
 
 <section class="employee-mode-view active" id="employeeSaleView">
 <section class="employee-work-card">
@@ -45,10 +49,28 @@
 </section>
 </section>
 
+<section class="employee-mode-view" id="employeeHistoryView">
+<section class="employee-work-card employee-history-card">
+<div class="employee-work-title"><p class="tag">my sales</p><h1>Sales history</h1><p>Only sales recorded from your own staff account are shown here.</p></div>
+<div class="employee-history-filters">
+<label>From<input id="employeeHistoryFrom" type="date"/></label>
+<label>To<input id="employeeHistoryTo" type="date"/></label>
+<button id="employeeHistoryApply" type="button">Apply</button>
+<button class="secondary" id="employeeHistoryToday" type="button">Today</button>
+<button class="secondary" id="employeeHistoryAll" type="button">All</button>
+</div>
+<div class="employee-history-summary" id="employeeHistorySummary">
+<div><small>Sales</small><b>0</b></div><div><small>Units</small><b>0</b></div><div><small>Amount</small><b>₹0</b></div>
+</div>
+<div class="employee-history-status" id="employeeHistoryStatus">Open history to load your sales.</div>
+<div class="employee-history-list" id="employeeHistoryList"></div>
+</section>
+</section>
+
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="js/employee.bundle.js?v=107"></script>
+<script src="js/employee.bundle.js?v=108"></script>
 
 <script src="js/pwa-install.js?v=107"></script>
 </body>

@@ -22,6 +22,8 @@ const ADMIN_CONFIG = {
   let channelReady=false;
   let inventoryChannel=null;
   let inventoryRefreshTimer=null;
+  let historyLoaded=false;
+  let historyDatesInitialized=false;
 
   function db(){
     if(!client) client=window.supabase.createClient(ADMIN_CONFIG.supabaseUrl,ADMIN_CONFIG.supabaseAnonKey,{realtime:{params:{eventsPerSecond:10}}});
@@ -33,6 +35,11 @@ const ADMIN_CONFIG = {
   function resetDeskToSale(){
     document.body.classList.remove('employee-manage-open');
     $('employeeSaleView')?.classList.add('active');
+    $('employeeHistoryView')?.classList.remove('active');
+    $('employeeSellTab')?.classList.add('active');
+    $('employeeHistoryTab')?.classList.remove('active');
+    $('employeeSellTab')?.setAttribute('aria-selected','true');
+    $('employeeHistoryTab')?.setAttribute('aria-selected','false');
   }
   function showDesk(){
     $('employeeLoginScreen').hidden=true; $('employeeDesk').hidden=false; $('employeeSessionName').textContent=session?.username||'Employee';
@@ -95,6 +102,57 @@ const ADMIN_CONFIG = {
     if(!searchResults.length){renderProduct(null);return;}
     if(searchResults.length===1){renderProduct(searchResults[0]);return;}
     box.innerHTML=`<div class="employee-search-results"><div class="employee-search-results-head"><b>${searchResults.length} products found</b><small>Choose the correct item to record a sale.</small></div>${searchResults.map((product,index)=>`<button type="button" data-employee-result="${index}"><span class="employee-search-photo">${product.image_url?`<img src="${esc(imageUrl(product.image_url))}" alt="">`:'No image'}</span><span><b>${esc(product.name)}</b><small>${product.barcode?`Barcode ${esc(product.barcode)} · `:''}${esc(stockSummary(product))}</small></span><strong>Select</strong></button>`).join('')}</div>`;
+  }
+  function isoLocalDate(date){
+    const y=date.getFullYear(),m=String(date.getMonth()+1).padStart(2,'0'),d=String(date.getDate()).padStart(2,'0');
+    return `${y}-${m}-${d}`;
+  }
+  function setDefaultHistoryDates(){
+    const from=$('employeeHistoryFrom'),to=$('employeeHistoryTo');
+    if(!from||!to||from.value||to.value)return;
+    const today=new Date(),start=new Date(today.getFullYear(),today.getMonth(),1);
+    from.value=isoLocalDate(start);to.value=isoLocalDate(today);
+  }
+  function formatHistoryTime(value){
+    try{return new Intl.DateTimeFormat('en-IN',{timeZone:'Asia/Kolkata',hour:'2-digit',minute:'2-digit'}).format(new Date(value));}catch(_e){return '';}
+  }
+  function formatHistoryDate(value){
+    try{return new Intl.DateTimeFormat('en-IN',{timeZone:'Asia/Kolkata',day:'2-digit',month:'short',year:'numeric'}).format(new Date(`${value}T12:00:00+05:30`));}catch(_e){return value;}
+  }
+  function renderSalesHistory(payload){
+    const rows=Array.isArray(payload?.sales)?payload.sales:[];
+    const summary=payload?.summary||{};
+    const summaryBox=$('employeeHistorySummary');
+    if(summaryBox)summaryBox.innerHTML=`<div><small>Sales</small><b>${Number(summary.transactions||0).toLocaleString('en-IN')}</b></div><div><small>Units</small><b>${Number(summary.units||0).toLocaleString('en-IN')}</b></div><div><small>Amount</small><b>${esc(money(summary.amount||0))}</b></div>`;
+    const box=$('employeeHistoryList');
+    if(!box)return;
+    if(!rows.length){box.innerHTML='<div class="employee-history-empty"><b>No sales in this date range</b><span>Record a sale or choose another date range.</span></div>';return;}
+    const groups=new Map();
+    rows.forEach(row=>{const day=clean(row.sale_date)||'Unknown date';if(!groups.has(day))groups.set(day,[]);groups.get(day).push(row);});
+    box.innerHTML=Array.from(groups.entries()).map(([day,sales])=>`<section class="employee-history-day"><div class="employee-history-day-head"><b>${esc(formatHistoryDate(day))}</b><span>${sales.reduce((sum,x)=>sum+Number(x.quantity||0),0)} units</span></div>${sales.map(row=>`<article class="employee-history-row"><div><b>${esc(row.product_name||'Product')}</b><small>${row.variant_label?esc(row.variant_label):'Standard item'}${row.barcode?` · ${esc(row.barcode)}`:''}</small></div><div class="employee-history-row-meta"><strong>×${Number(row.quantity||0)}</strong><span>${esc(formatHistoryTime(row.created_at))}</span><small>${esc(money(row.total_amount||0))}</small></div></article>`).join('')}</section>`).join('');
+  }
+  async function loadSalesHistory(){
+    if(!session?.token)return;
+    const status=$('employeeHistoryStatus');if(status){status.textContent='Loading sales history...';status.className='employee-history-status loading';}
+    try{
+      const {data,error}=await db().rpc('employee_sales_history',{p_token:session.token,p_from:$('employeeHistoryFrom')?.value||null,p_to:$('employeeHistoryTo')?.value||null});
+      if(error)throw error;
+      renderSalesHistory(data||{});historyLoaded=true;
+      if(status){status.textContent='History updated.';status.className='employee-history-status ok';}
+    }catch(error){
+      if(/expired|login/i.test(error.message||'')){showLogin('Session expired. Login again.');return;}
+      if(status){status.textContent=/employee_sales_history|schema cache|function/i.test(error.message||'')?'Run REQUIRED_V108_SUPABASE.sql in Supabase first.':(error.message||'Could not load sales history.');status.className='employee-history-status error';}
+    }
+  }
+  function switchEmployeeMode(mode){
+    const history=mode==='history';
+    $('employeeSaleView')?.classList.toggle('active',!history);
+    $('employeeHistoryView')?.classList.toggle('active',history);
+    $('employeeSellTab')?.classList.toggle('active',!history);
+    $('employeeHistoryTab')?.classList.toggle('active',history);
+    $('employeeSellTab')?.setAttribute('aria-selected',String(!history));
+    $('employeeHistoryTab')?.setAttribute('aria-selected',String(history));
+    if(history){if(!historyDatesInitialized){setDefaultHistoryDates();historyDatesInitialized=true;}loadSalesHistory().catch(()=>{});window.scrollTo({top:0,behavior:'smooth'});}else{setTimeout(()=>$('employeeBarcodeInput')?.focus({preventScroll:true}),30);}
   }
   async function ensureBroadcast(){
     if(channelReady&&channel)return channel;
@@ -168,7 +226,7 @@ const ADMIN_CONFIG = {
       const {data,error}=await db().rpc('employee_record_sale',{p_token:session?.token||'',p_product_id:currentProduct.id,p_variant_id:variantId,p_quantity:qty});
       if(error)throw error;
       renderProduct(data); setStatus(currentProduct.track_inventory?`Sold ${qty} unit${qty===1?'':'s'}. Stock updated live.`:`Sale recorded (${qty}). Availability remains manual.`,'ok');
-      broadcastStock(currentProduct.id,variantId).catch(()=>{});
+      historyLoaded=false; broadcastStock(currentProduct.id,variantId).catch(()=>{});
     }catch(error){
       if(/expired|login/i.test(error.message||'')){showLogin('Session expired. Login again.');return;}
       setStatus(error.message||'Could not record sale.','error'); button.disabled=false;
@@ -180,5 +238,10 @@ const ADMIN_CONFIG = {
   $('employeeBarcodeForm').addEventListener('submit',findBarcode);
   $('employeeLogoutBtn').addEventListener('click',logout);
   $('employeeProductResult').addEventListener('click',event=>{const button=event.target.closest('[data-employee-result]');if(!button)return;const product=searchResults[Number(button.dataset.employeeResult)];if(product){renderProduct(product);setStatus(`${product.name} loaded.`,'ok');}});
+  $('employeeSellTab')?.addEventListener('click',()=>switchEmployeeMode('sell'));
+  $('employeeHistoryTab')?.addEventListener('click',()=>switchEmployeeMode('history'));
+  $('employeeHistoryApply')?.addEventListener('click',()=>loadSalesHistory());
+  $('employeeHistoryToday')?.addEventListener('click',()=>{const today=isoLocalDate(new Date());$('employeeHistoryFrom').value=today;$('employeeHistoryTo').value=today;loadSalesHistory();});
+  $('employeeHistoryAll')?.addEventListener('click',()=>{$('employeeHistoryFrom').value='';$('employeeHistoryTo').value='';loadSalesHistory();});
   session=loadSession(); if(session?.token&&session?.username)showDesk(); else showLogin('');
 })();

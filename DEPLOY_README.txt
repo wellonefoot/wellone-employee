@@ -1,3 +1,8 @@
+SHOPIZO Sales Staff v109 — Undo Sale
+1. Apply REQUIRED_V109_SUPABASE.sql (AFTER v108).
+2. Deploy the CONTENTS of this folder to the employee website.
+3. Go to My History → Undo Sale → Confirm. Original tracked stock comes back.
+
 SHOPIZO Sales Staff v108 — per-staff sales history
 1. Run REQUIRED_V108_SUPABASE.sql once in Supabase SQL Editor.
 2. Deploy this folder. Each Sales Staff login has its own history.

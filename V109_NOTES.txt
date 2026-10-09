@@ -1,0 +1,17 @@
+SHOPIZO Sales Staff v109 — Undo Sale + stock restore
+
+1. FIRST run REQUIRED_V109_SUPABASE.sql in Supabase SQL Editor (v108 must already be installed).
+2. THEN deploy the CONTENTS of this folder to the Sales Staff site root.
+3. Open My History, select a sale and choose Undo Sale, then confirm.
+
+HOW IT WORKS
+- Each staff member can undo their own sales, including older recorded sales with intact original stock movements.
+- Exact colour/size and full sold quantity are returned atomically in Supabase.
+- A sale can be undone only once, and is visibly marked Undone.
+- The original sale and a linked reversal remain recorded for auditing.
+- Staff and admin totals/leaderboards exclude undone sales.
+- Items recorded using manual stock mode never had inventory deducted, so undo only cancels the sale record.
+- Sales with a deleted original product/variant, or missing stock-movement evidence, are not silently reversed. Admin must reconcile those.
+
+IMPORTANT: Simply deploying the website WITHOUT running the new SQL cannot make undo work.
+The v109 SQL updates the EXISTING functions/table; it does not remove sales or products.

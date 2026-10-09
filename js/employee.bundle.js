@@ -24,6 +24,7 @@ const ADMIN_CONFIG = {
   let inventoryRefreshTimer=null;
   let historyLoaded=false;
   let historyDatesInitialized=false;
+  let historySales=[];
 
   function db(){
     if(!client) client=window.supabase.createClient(ADMIN_CONFIG.supabaseUrl,ADMIN_CONFIG.supabaseAnonKey,{realtime:{params:{eventsPerSecond:10}}});
@@ -121,6 +122,7 @@ const ADMIN_CONFIG = {
   }
   function renderSalesHistory(payload){
     const rows=Array.isArray(payload?.sales)?payload.sales:[];
+    historySales=rows;
     const summary=payload?.summary||{};
     const summaryBox=$('employeeHistorySummary');
     if(summaryBox)summaryBox.innerHTML=`<div><small>Sales</small><b>${Number(summary.transactions||0).toLocaleString('en-IN')}</b></div><div><small>Units</small><b>${Number(summary.units||0).toLocaleString('en-IN')}</b></div><div><small>Amount</small><b>${esc(money(summary.amount||0))}</b></div>`;
@@ -129,7 +131,48 @@ const ADMIN_CONFIG = {
     if(!rows.length){box.innerHTML='<div class="employee-history-empty"><b>No sales in this date range</b><span>Record a sale or choose another date range.</span></div>';return;}
     const groups=new Map();
     rows.forEach(row=>{const day=clean(row.sale_date)||'Unknown date';if(!groups.has(day))groups.set(day,[]);groups.get(day).push(row);});
-    box.innerHTML=Array.from(groups.entries()).map(([day,sales])=>`<section class="employee-history-day"><div class="employee-history-day-head"><b>${esc(formatHistoryDate(day))}</b><span>${sales.reduce((sum,x)=>sum+Number(x.quantity||0),0)} units</span></div>${sales.map(row=>`<article class="employee-history-row"><div><b>${esc(row.product_name||'Product')}</b><small>${row.variant_label?esc(row.variant_label):'Standard item'}${row.barcode?` · ${esc(row.barcode)}`:''}</small></div><div class="employee-history-row-meta"><strong>×${Number(row.quantity||0)}</strong><span>${esc(formatHistoryTime(row.created_at))}</span><small>${esc(money(row.total_amount||0))}</small></div></article>`).join('')}</section>`).join('');
+    box.innerHTML=Array.from(groups.entries()).map(([day,sales])=>`<section class="employee-history-day">
+      <div class="employee-history-day-head"><b>${esc(formatHistoryDate(day))}</b><span>${sales.filter(row=>!row.undone_at).reduce((sum,x)=>sum+Number(x.quantity||0),0)} active units</span></div>
+      ${sales.map(row=>`<article class="employee-history-row ${row.undone_at?'is-undone':''}">
+        <div class="employee-history-product"><b>${esc(row.product_name||'Product')}</b><small>${row.variant_label?esc(row.variant_label):'Standard item'}${row.barcode?` · ${esc(row.barcode)}`:''}</small>
+          ${row.undone_at?`<span class="employee-sale-undone">✓ Undone · ${esc(formatUndoDate(row.undone_at))}</span>`:''}
+        </div>
+        <div class="employee-history-row-meta"><strong>×${Number(row.quantity||0)}</strong><span>${esc(formatHistoryTime(row.created_at))}</span><small>${esc(money(row.total_amount||0))}</small></div>
+        ${!row.undone_at?`<button type="button" class="employee-undo-btn" data-undo-sale="${esc(row.id)}" aria-label="Undo ${esc(row.product_name||'sale')}"><span aria-hidden="true">↶</span> Undo Sale</button>`:''}
+      </article>`).join('')}
+    </section>`).join('');
+  }
+  function formatUndoDate(value){
+    try{return new Intl.DateTimeFormat('en-IN',{timeZone:'Asia/Kolkata',day:'2-digit',month:'short',year:'numeric'}).format(new Date(value));}
+    catch(_e){return ''; }
+  }
+  async function undoSale(saleId,button){
+    if(!session?.token)return;
+    const row=historySales.find(sale=>String(sale.id)===String(saleId));
+    if(!row||row.undone_at)return;
+    const quantity=Number(row.quantity||0);
+    if(!window.confirm(`Undo this sale?\n\n${row.product_name||'Product'}${row.variant_label?` (${row.variant_label})`:''}\nQuantity: ${quantity}\n\nTracked items will be returned to their exact stock. This action cannot be undone.`))return;
+    const status=$('employeeHistoryStatus');
+    button.disabled=true;
+    if(status){status.textContent='Undoing sale and restoring inventory...';status.className='employee-history-status loading';}
+    try{
+      const {data,error}=await db().rpc('employee_undo_sale',{p_token:session.token,p_sale_id:Number(row.id)});
+      if(error)throw error;
+      historyLoaded=false;
+      await loadSalesHistory();
+      if(status){status.textContent=data?.stock_restored?`${quantity} unit${quantity===1?'':'s'} returned to stock. Sale undone.`:'Sale undone. This item uses manual stock, so inventory was not changed.';status.className='employee-history-status ok';}
+      if(data?.stock_restored){
+        broadcastStock(data.product_id,data.variant_id,'employee-sale-undo').catch(()=>{});
+        if(currentProduct?.id===data.product_id){
+          const result=await db().rpc('employee_get_product',{p_token:session.token,p_product_id:data.product_id});
+          if(!result.error&&result.data)renderProduct(result.data);
+        }
+      }
+    }catch(error){
+      if(/expired|login/i.test(error.message||'')){showLogin('Session expired. Login again.');return;}
+      button.disabled=false;
+      if(status){status.textContent=/employee_undo_sale|schema cache|function/i.test(error.message||'')?'Run REQUIRED_V109_SUPABASE.sql in Supabase first.':(error.message||'Could not undo sale.');status.className='employee-history-status error';}
+    }
   }
   async function loadSalesHistory(){
     if(!session?.token)return;
@@ -165,10 +208,10 @@ const ADMIN_CONFIG = {
     });
     return channel;
   }
-  async function broadcastStock(productId,variantId){
+  async function broadcastStock(productId,variantId,action='employee-sale'){
     try{
       const ch=await ensureBroadcast(); if(!ch||!channelReady)return;
-      await ch.send({type:'broadcast',event:STORE_EVENT_NAME,payload:{tables:['products','product_variants'],action:'employee-sale',details:{productId,variantId:variantId||null},eventId:`employee-${Date.now()}-${Math.random().toString(36).slice(2)}`,at:Date.now()}});
+      await ch.send({type:'broadcast',event:STORE_EVENT_NAME,payload:{tables:['products','product_variants'],action,details:{productId,variantId:variantId||null},eventId:`employee-${Date.now()}-${Math.random().toString(36).slice(2)}`,at:Date.now()}});
     }catch(_e){}
   }
   function stopInventoryRealtime(){if(inventoryRefreshTimer){clearTimeout(inventoryRefreshTimer);inventoryRefreshTimer=null;}if(inventoryChannel){try{db().removeChannel(inventoryChannel);}catch(_e){}inventoryChannel=null;}}
@@ -241,6 +284,7 @@ const ADMIN_CONFIG = {
   $('employeeSellTab')?.addEventListener('click',()=>switchEmployeeMode('sell'));
   $('employeeHistoryTab')?.addEventListener('click',()=>switchEmployeeMode('history'));
   $('employeeHistoryApply')?.addEventListener('click',()=>loadSalesHistory());
+  $('employeeHistoryList')?.addEventListener('click',event=>{const button=event.target.closest('button[data-undo-sale]');if(button)undoSale(button.dataset.undoSale,button);});
   $('employeeHistoryToday')?.addEventListener('click',()=>{const today=isoLocalDate(new Date());$('employeeHistoryFrom').value=today;$('employeeHistoryTo').value=today;loadSalesHistory();});
   $('employeeHistoryAll')?.addEventListener('click',()=>{$('employeeHistoryFrom').value='';$('employeeHistoryTo').value='';loadSalesHistory();});
   session=loadSession(); if(session?.token&&session?.username)showDesk(); else showLogin('');

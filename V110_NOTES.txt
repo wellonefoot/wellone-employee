@@ -1,0 +1,6 @@
+V110 — Sales history Undo Sale UI only.
+- Small Undo Sale button on the right of each history item (also on mobile).
+- Tap to review photo, product name, item ID, variant and quantity.
+- Cancel does nothing; Confirm calls existing employee_undo_sale RPC.
+- Run REQUIRED_V110_SUPABASE.sql in Supabase SQL Editor to include exact item image and ID in sales history.
+- No stock logic, tables, or other flows were changed.

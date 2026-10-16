@@ -394,15 +394,45 @@ body.employee-manage-open #employeeSaleView{display:none!important}
 @media(max-width:430px){.employee-history-filters{grid-template-columns:1fr 1fr}.employee-history-filters button:first-of-type{grid-column:1/-1}.employee-history-summary{gap:6px}.employee-history-summary>div{padding:10px 8px}.employee-history-summary small{font-size:8px}.employee-history-summary b{font-size:14px}}
 
 
-/* v109 sale undo: visible action, immutable undone state */
+/* v110: compact Undo Sale action beside each sale (including narrow phones). */
 .employee-history-row.is-undone{background:#f8faf6;border-color:#e5eadc}
 .employee-history-row.is-undone .employee-history-product>b{color:#7d8776}
 .employee-history-row.is-undone .employee-history-row-meta{opacity:.58}
 .employee-history-product{display:grid;gap:4px;min-width:0}
 .employee-sale-undone{display:inline-flex;justify-self:start;padding:5px 9px;border:1px solid #d2e4cd;border-radius:999px;background:#edf8e9;color:#396a36;font-size:11px;font-weight:900}
-.employee-undo-btn{grid-column:1/-1;justify-self:end;display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:39px;padding:8px 14px;border:1px solid #e6c8b8;border-radius:11px;background:#fff8f4;color:#994928;font:inherit;font-size:12px;font-weight:900;cursor:pointer;transition:background .15s,border-color .15s}
+.employee-history-row-side{display:flex;align-items:center;justify-content:flex-end;gap:10px;min-width:0}
+.employee-history-row-meta{flex:none}
+.employee-undo-btn{flex:none;display:inline-flex;align-items:center;justify-content:center;gap:4px;min-height:29px;width:auto;white-space:nowrap;padding:5px 9px;border:1px solid #e6c8b8;border-radius:8px;background:#fff8f4;color:#994928;font:inherit;font-size:10px;font-weight:900;line-height:1.15;cursor:pointer;transition:background .15s,border-color .15s}
 .employee-undo-btn:hover{background:#ffede2;border-color:#cc997c}
 .employee-undo-btn:focus-visible{outline:3px solid #c47a52;outline-offset:2px}
 .employee-undo-btn:disabled{opacity:.45;cursor:wait}
-.employee-undo-btn span{font-size:20px;line-height:1}
-@media(max-width:720px){.employee-undo-btn{width:100%;justify-self:stretch}}
+.employee-undo-btn span{font-size:14px;line-height:1}
+@media(max-width:520px){
+  .employee-history-row{gap:7px;padding:11px 9px}
+  .employee-history-row-side{flex-direction:column;align-items:flex-end;gap:6px}
+  .employee-history-row-meta{grid-template-columns:auto auto;gap:2px 5px}
+  .employee-undo-btn{width:auto;align-self:flex-end;min-height:28px;padding:5px 7px;font-size:10px}
+}
+/* Accessible confirmation with the exact sale image, name, item identifier and quantity. */
+body.employee-undo-open{overflow:hidden}
+.employee-undo-overlay[hidden]{display:none!important}
+.employee-undo-overlay{position:fixed;inset:0;z-index:2000;display:flex;align-items:center;justify-content:center;padding:18px;background:rgba(14,24,13,.57)}
+.employee-undo-dialog{box-sizing:border-box;width:min(100%,420px);max-height:min(88vh,650px);overflow-y:auto;border:1px solid #e3e9d8;border-radius:20px;background:#fff;padding:22px;box-shadow:0 24px 75px rgba(0,0,0,.24);color:#24310d}
+.employee-undo-dialog h2{margin:0 0 16px;font-size:20px;font-weight:950;line-height:1.25}
+.employee-undo-details{display:flex;align-items:center;gap:14px;padding:12px;border:1px solid #e6ecd9;border-radius:13px;background:#fbfcf8}
+.employee-undo-photo{display:flex;align-items:center;justify-content:center;flex:none;width:82px;height:96px;overflow:hidden;border-radius:10px;background:#fff;border:1px solid #edf0e9;color:#8a9182;font-size:11px;font-weight:800;text-align:center}
+.employee-undo-photo img{display:block;width:100%;height:100%;object-fit:contain}
+.employee-undo-info{display:grid;gap:5px;min-width:0;overflow-wrap:anywhere}
+.employee-undo-info b{font-size:14px;color:#1f2b0c;line-height:1.3}
+.employee-undo-info span{font-size:11px;font-weight:900;color:#42591d}
+.employee-undo-info small{font-size:11px;font-weight:700;color:#66715a}
+.employee-undo-dialog>p:not(.employee-undo-error){margin:14px 0 16px;color:#66715a;font-size:12px;line-height:1.6}
+.employee-undo-error{margin:0 0 12px;color:#a23c3c;font-size:11px;font-weight:800}
+.employee-undo-error:empty{display:none}
+.employee-undo-dialog-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.employee-undo-dialog-actions button{min-height:43px;padding:10px 12px;border-radius:11px;font:inherit;font-size:13px;font-weight:900;cursor:pointer}
+#employeeUndoCancel{background:#f2f5ee;color:#435039;border:1px solid #dce4d0}
+#employeeUndoConfirm{background:#943e2c;color:#fff;border:1px solid #943e2c}
+.employee-undo-dialog-actions button:focus-visible{outline:3px solid #b7cc8e;outline-offset:2px}
+.employee-undo-dialog-actions button:disabled{opacity:.58;cursor:wait}
+@media(max-width:420px){.employee-undo-dialog{padding:17px}.employee-undo-photo{width:70px;height:84px}.employee-undo-details{gap:10px;padding:9px}}

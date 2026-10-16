@@ -6,7 +6,7 @@
 <meta content="width=device-width,initial-scale=1,viewport-fit=cover" name="viewport"/>
 <title>SHOPIZO Sales Staff</title>
 <link href="https://wnavzhrkwgnegjdetdno.supabase.co" rel="preconnect"/>
-<link href="css/admin.css?v=109" rel="stylesheet"/>
+<link href="css/admin.css?v=110" rel="stylesheet"/>
 <link href="assets/favicon/favicon.ico" rel="icon"/>
 <link href="manifest.webmanifest" rel="manifest"/>
 <link href="assets/favicon/apple-icon-180x180.png" rel="apple-touch-icon"/>
@@ -69,9 +69,31 @@
 
 </main>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="js/employee.bundle.js?v=109"></script>
+<div class="employee-undo-overlay" id="employeeUndoDialog" hidden>
+  <section class="employee-undo-dialog" role="alertdialog" aria-modal="true" aria-labelledby="employeeUndoTitle" aria-describedby="employeeUndoDescription">
+    <h2 id="employeeUndoTitle">Undo this sale?</h2>
+    <div class="employee-undo-details">
+      <div class="employee-undo-photo" id="employeeUndoPhoto">No image</div>
+      <div class="employee-undo-info">
+        <b id="employeeUndoName">Product</b>
+        <span id="employeeUndoItemId"></span>
+        <small id="employeeUndoVariant"></small>
+        <small id="employeeUndoQuantity"></small>
+        <small id="employeeUndoSaleId"></small>
+      </div>
+    </div>
+    <p id="employeeUndoDescription">Confirm to undo this sale. Tracked stock will be restored to the exact item. This cannot be undone.</p>
+    <p class="employee-undo-error" id="employeeUndoError" role="alert"></p>
+    <div class="employee-undo-dialog-actions">
+      <button id="employeeUndoCancel" type="button">Cancel</button>
+      <button id="employeeUndoConfirm" type="button">Confirm</button>
+    </div>
+  </section>
+</div>
 
-<script src="js/pwa-install.js?v=109"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/employee.bundle.js?v=110"></script>
+
+<script src="js/pwa-install.js?v=110"></script>
 </body>
 </html>

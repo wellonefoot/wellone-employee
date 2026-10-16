@@ -17,6 +17,8 @@
   let historyLoaded=false;
   let historyDatesInitialized=false;
   let historySales=[];
+  let undoPending=null;
+  let undoBusy=false;
 
   function db(){
     if(!client) client=window.supabase.createClient(ADMIN_CONFIG.supabaseUrl,ADMIN_CONFIG.supabaseAnonKey,{realtime:{params:{eventsPerSecond:10}}});
@@ -129,8 +131,10 @@
         <div class="employee-history-product"><b>${esc(row.product_name||'Product')}</b><small>${row.variant_label?esc(row.variant_label):'Standard item'}${row.barcode?` · ${esc(row.barcode)}`:''}</small>
           ${row.undone_at?`<span class="employee-sale-undone">✓ Undone · ${esc(formatUndoDate(row.undone_at))}</span>`:''}
         </div>
-        <div class="employee-history-row-meta"><strong>×${Number(row.quantity||0)}</strong><span>${esc(formatHistoryTime(row.created_at))}</span><small>${esc(money(row.total_amount||0))}</small></div>
-        ${!row.undone_at?`<button type="button" class="employee-undo-btn" data-undo-sale="${esc(row.id)}" aria-label="Undo ${esc(row.product_name||'sale')}"><span aria-hidden="true">↶</span> Undo Sale</button>`:''}
+        <div class="employee-history-row-side">
+          <div class="employee-history-row-meta"><strong>×${Number(row.quantity||0)}</strong><span>${esc(formatHistoryTime(row.created_at))}</span><small>${esc(money(row.total_amount||0))}</small></div>
+          ${!row.undone_at?`<button type="button" class="employee-undo-btn" data-undo-sale="${esc(row.id)}" aria-label="Undo ${esc(row.product_name||'sale')}"><span aria-hidden="true">↶</span> Undo Sale</button>`:''}
+        </div>
       </article>`).join('')}
     </section>`).join('');
   }
@@ -138,18 +142,63 @@
     try{return new Intl.DateTimeFormat('en-IN',{timeZone:'Asia/Kolkata',day:'2-digit',month:'short',year:'numeric'}).format(new Date(value));}
     catch(_e){return ''; }
   }
-  async function undoSale(saleId,button){
-    if(!session?.token)return;
+  function openUndoDialog(saleId,button){
+    if(undoBusy||!session?.token)return;
     const row=historySales.find(sale=>String(sale.id)===String(saleId));
     if(!row||row.undone_at)return;
+    const dialog=$('employeeUndoDialog');
+    if(!dialog)return;
+    undoPending={row,button};
+    $('employeeUndoName').textContent=row.product_name||'Product';
+    const itemId=clean(row.item_id||row.barcode||row.product_id);
+    $('employeeUndoItemId').textContent=itemId?`Item ID: ${itemId}`:`Sale ID: #${row.id}`;
+    $('employeeUndoVariant').textContent=row.variant_label||'Standard item';
+    $('employeeUndoQuantity').textContent=`Quantity: ${Number(row.quantity||0)}`;
+    $('employeeUndoSaleId').textContent=`Sale #${row.id}`;
+    const photo=$('employeeUndoPhoto');
+    photo.replaceChildren();
+    const src=imageUrl(row.image_url);
+    if(src && /^(https?:\/\/|\/)/i.test(src)){
+      const img=document.createElement('img');
+      img.alt=row.product_name||'Product image';
+      img.src=src;
+      img.onerror=()=>{photo.textContent='No image';};
+      photo.appendChild(img);
+    }else photo.textContent='No image';
+    $('employeeUndoError').textContent='';
+    $('employeeUndoCancel').disabled=false;
+    $('employeeUndoConfirm').disabled=false;
+    $('employeeUndoConfirm').textContent='Confirm';
+    dialog.hidden=false;
+    document.body.classList.add('employee-undo-open');
+    $('employeeUndoCancel').focus();
+  }
+  function closeUndoDialog(force=false){
+    if(undoBusy&&!force)return;
+    const dialog=$('employeeUndoDialog');
+    if(dialog)dialog.hidden=true;
+    document.body.classList.remove('employee-undo-open');
+    const button=undoPending?.button;
+    undoPending=null;
+    if(button?.isConnected&&!button.disabled)button.focus({preventScroll:true});
+  }
+  async function undoSale(){
+    if(!session?.token||!undoPending||undoBusy)return;
+    const {row,button}=undoPending;
+    if(row.undone_at)return;
     const quantity=Number(row.quantity||0);
-    if(!window.confirm(`Undo this sale?\n\n${row.product_name||'Product'}${row.variant_label?` (${row.variant_label})`:''}\nQuantity: ${quantity}\n\nTracked items will be returned to their exact stock. This action cannot be undone.`))return;
     const status=$('employeeHistoryStatus');
+    undoBusy=true;
     button.disabled=true;
+    $('employeeUndoCancel').disabled=true;
+    $('employeeUndoConfirm').disabled=true;
+    $('employeeUndoConfirm').textContent='Undoing...';
+    $('employeeUndoError').textContent='';
     if(status){status.textContent='Undoing sale and restoring inventory...';status.className='employee-history-status loading';}
     try{
       const {data,error}=await db().rpc('employee_undo_sale',{p_token:session.token,p_sale_id:Number(row.id)});
       if(error)throw error;
+      closeUndoDialog(true);
       historyLoaded=false;
       await loadSalesHistory();
       if(status){status.textContent=data?.stock_restored?`${quantity} unit${quantity===1?'':'s'} returned to stock. Sale undone.`:'Sale undone. This item uses manual stock, so inventory was not changed.';status.className='employee-history-status ok';}
@@ -161,9 +210,16 @@
         }
       }
     }catch(error){
-      if(/expired|login/i.test(error.message||'')){showLogin('Session expired. Login again.');return;}
+      if(/expired|login/i.test(error.message||'')){closeUndoDialog(true);showLogin('Session expired. Login again.');return;}
       button.disabled=false;
-      if(status){status.textContent=/employee_undo_sale|schema cache|function/i.test(error.message||'')?'Run REQUIRED_V109_SUPABASE.sql in Supabase first.':(error.message||'Could not undo sale.');status.className='employee-history-status error';}
+      const message=/employee_undo_sale|schema cache|function/i.test(error.message||'')?'Run REQUIRED_V109_SUPABASE.sql in Supabase first.':(error.message||'Could not undo sale.');
+      if(status){status.textContent=message;status.className='employee-history-status error';}
+      if(undoPending)$('employeeUndoError').textContent=message;
+    }finally{
+      undoBusy=false;
+      $('employeeUndoCancel').disabled=false;
+      $('employeeUndoConfirm').disabled=false;
+      $('employeeUndoConfirm').textContent='Confirm';
     }
   }
   async function loadSalesHistory(){
@@ -276,7 +332,21 @@
   $('employeeSellTab')?.addEventListener('click',()=>switchEmployeeMode('sell'));
   $('employeeHistoryTab')?.addEventListener('click',()=>switchEmployeeMode('history'));
   $('employeeHistoryApply')?.addEventListener('click',()=>loadSalesHistory());
-  $('employeeHistoryList')?.addEventListener('click',event=>{const button=event.target.closest('button[data-undo-sale]');if(button)undoSale(button.dataset.undoSale,button);});
+  $('employeeHistoryList')?.addEventListener('click',event=>{const button=event.target.closest('button[data-undo-sale]');if(button)openUndoDialog(button.dataset.undoSale,button);});
+  $('employeeUndoCancel')?.addEventListener('click',()=>closeUndoDialog());
+  $('employeeUndoConfirm')?.addEventListener('click',undoSale);
+  $('employeeUndoDialog')?.addEventListener('click',event=>{if(event.target===$('employeeUndoDialog'))closeUndoDialog();});
+  document.addEventListener('keydown',event=>{
+    if($('employeeUndoDialog')?.hidden)return;
+    if(event.key==='Escape'){event.preventDefault();closeUndoDialog();}
+    if(event.key==='Tab'){
+      const buttons=[$('employeeUndoCancel'),$('employeeUndoConfirm')].filter(button=>!button.disabled);
+      if(!buttons.length){event.preventDefault();return;}
+      const first=buttons[0],last=buttons[buttons.length-1];
+      if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}
+      else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}
+    }
+  });
   $('employeeHistoryToday')?.addEventListener('click',()=>{const today=isoLocalDate(new Date());$('employeeHistoryFrom').value=today;$('employeeHistoryTo').value=today;loadSalesHistory();});
   $('employeeHistoryAll')?.addEventListener('click',()=>{$('employeeHistoryFrom').value='';$('employeeHistoryTo').value='';loadSalesHistory();});
   session=loadSession(); if(session?.token&&session?.username)showDesk(); else showLogin('');
